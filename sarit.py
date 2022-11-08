@@ -16,13 +16,15 @@ from keras.models import Sequential, Model
 from keras.layers import Conv2D, MaxPool2D, Flatten, Dense, GlobalAveragePooling2D, Dropout, BatchNormalization, Input
 from keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
 from keras.applications.vgg16 import VGG16, preprocess_input
+from keras.applications.vgg16 import VGG16
+from keras.models import Model
 
 batch_size = 128
 seed = 666
 tf.random.set_seed(seed)
 np.random.seed(seed)
 os.environ["PYTHONHASHSEED"] = str(seed)                      
-random.seed(666)
+random.seed(seed)
 
 TRAIN_PATH = "./train.zip"
 TEST_PATH = "./test1.zip"
@@ -30,6 +32,7 @@ TEST_PATH = "./test1.zip"
 FILES = "./Images/"
 FILES_TRAIN = "./Images/train"
 FILES_TEST = "./Images/test1"
+FILES_WEIGHTS = "catdog_vgg16.hdf5"
 
 def extract_files():
     with zipfile.ZipFile(TRAIN_PATH, 'r') as zipp:
@@ -37,6 +40,7 @@ def extract_files():
         
     with zipfile.ZipFile(TEST_PATH, 'r') as zipp:
         zipp.extractall(FILES)
+
 
 train_df = pd.DataFrame({"file": os.listdir(FILES_TRAIN)})
 train_df["label"] = train_df["file"].apply(lambda x: x.split(".")[0])
@@ -160,10 +164,6 @@ val_generator = val_datagen.flow_from_dataframe(
 )
 
 
-from keras.applications.vgg16 import VGG16
-from keras.models import Model
-
-
 input_shape=(224,224,3)
 batch_size= 128
 
@@ -213,7 +213,7 @@ early_stopping = EarlyStopping(
 
 checkpoint = ModelCheckpoint(
     monitor = "val_accuracy",
-    filepath = "catdog_vgg16_.{epoch:02d}-{val_accuracy:.6f}.hdf5",
+    filepath = FILES_WEIGHTS,
     verbose = 1,
     save_best_only = True, 
     save_weights_only = True
@@ -232,7 +232,7 @@ history = model.fit(
 
 tf.keras.backend.clear_session()
 model = vgg16_pretrained()
-model.load_weights("./catdog_vgg16_.10-0.983774.hdf5")
+model.load_weights(FILES_WEIGHTS)
 
 
 fig, axes = plt.subplots(1, 2, figsize = (12, 4))
@@ -243,8 +243,6 @@ sns.lineplot(x = range(len(history.history["accuracy"])), y = history.history["v
 axes[0].set_title("Loss"); axes[1].set_title("Accuracy")
 sns.despine()
 plt.show()
-
-exit()
 
 val_pred = model.predict(val_generator, steps = np.ceil(val_data.shape[0] / batch_size))
 val_data.loc[:, "val_pred"] = np.argmax(val_pred, axis = 1)
