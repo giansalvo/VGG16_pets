@@ -34,11 +34,10 @@ FILES = "./Images/"
 FILES_TRAIN = "./Images/train"
 FILES_TEST = "./Images/test1"
 FILES_WEIGHTS = "catdog_vgg16.hdf5"
-FILE_AUGMENT = "./perf_augment.png"
-FILE_CM = "./perf_cm.png"
-
 
 # Output performance file names
+FILE_AUGMENT = "./perf_augment.png"
+FILE_CM = "./perf_cm.png"
 FILE_DISTRIBUTION = "./perf_distrib.png"
 FILE_SAMPLES = "./perf_samples.png"
 FILE_SAMPLES_DOGS = "./perf_samples_dogs.png"
@@ -191,41 +190,41 @@ def main():
                                             test_size = 0.2, 
                                             stratify = train_df["label"], 
                                             random_state = SEED)
-    datagen = ImageDataGenerator(
-        rotation_range = 30, 
-        width_shift_range = 0.1,
-        height_shift_range = 0.1, 
-        brightness_range = (0.5, 1), 
-        zoom_range = 0.2,
-        horizontal_flip = True, 
-        rescale = 1./255,
-    )
-    sample_df = train_data.sample(1)
-    sample_generator = datagen.flow_from_dataframe(
-        dataframe = sample_df,
-        directory = FILES + "train/",
-        x_col = "file",
-        y_col = "label",
-        class_mode = "categorical",
-        target_size = (224, 224),
-        seed = 666
-    )
+    # datagen = ImageDataGenerator(
+    #     rotation_range = 30, 
+    #     width_shift_range = 0.1,
+    #     height_shift_range = 0.1, 
+    #     brightness_range = (0.5, 1), 
+    #     zoom_range = 0.2,
+    #     horizontal_flip = True, 
+    #     rescale = 1./255,
+    # )
+    # sample_df = train_data.sample(1)
+    # sample_generator = datagen.flow_from_dataframe(
+    #     dataframe = sample_df,
+    #     directory = FILES + "train/",
+    #     x_col = "file",
+    #     y_col = "label",
+    #     class_mode = "categorical",
+    #     target_size = (224, 224),
+    #     seed = SEED
+    # )
 
-    fig = plt.figure(figsize = (14, 8))
-    fig.suptitle("Augmentation techniques")
-    for i in range(50):
-        plt.subplot(5, 10, i + 1)
-        for X, y in sample_generator:
-            plt.imshow(X[0])
-            plt.axis("off")
-            break
-    plt.tight_layout()
-    if check:
-        plt.show()
-    else:
-        logger.debug("Saving augmentation samples to file {}...".format(FILE_AUGMENT))
-        plt.savefig(FILE_AUGMENT)
-        plt.close()
+    # fig = plt.figure(figsize = (14, 8))
+    # fig.suptitle("Augmentation techniques")
+    # for i in range(50):
+    #     plt.subplot(5, 10, i + 1)
+    #     for X, y in sample_generator:
+    #         plt.imshow(X[0])
+    #         plt.axis("off")
+    #         break
+    # plt.tight_layout()
+    # if check:
+    #     plt.show()
+    # else:
+    #     logger.debug("Saving augmentation samples to file {}...".format(FILE_AUGMENT))
+    #     plt.savefig(FILE_AUGMENT)
+    #     plt.close()
 
     train_datagen = ImageDataGenerator(
         rotation_range = 15, 
@@ -316,6 +315,7 @@ def main():
         plt.close()
 
         tf.keras.backend.clear_session()
+        
     elif action == ACTION_PREDICT:
         model = vgg16_pretrained()
         model.load_weights(FILES_WEIGHTS)
