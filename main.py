@@ -133,8 +133,11 @@ def main():
                 "       Train the network\n"
                 "         $python %(prog)s train -dr dataset_root_folder [-b batch_size] [-c num_classes]\n"
                 "\n"
-                "       Make predictions and compute confusion matrix\n"
-                "         $python %(prog)s predict -dr dataset_root_folder\n"
+                "       Make prediction for an image\n"
+                "         $python %(prog)s predict -i input_image [-c num_classes]\n"
+                "\n"
+                "       Evaluate the network and compute confusion matrix and performance indexes\n"
+                "         $python %(prog)s evaluate -dr dataset_root_folder\n"
                 "\n",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--version', action='version', version='%(prog)s v.' + PROGRAM_VERSION)
@@ -145,153 +148,155 @@ def main():
     parser.add_argument("-b", "--batch_size", required=False, default=BATCH_SIZE_DEFAULT, type=int, help="the number of samples that are passed to the network at once during the training")
     parser.add_argument('-c', "--num_classes", required=False, default=NUM_CLASSES_DEFAULT, type=int,
                         help="The number of possible classes for an images.")
+    parser.add_argument("-i", "--input_image", required=False, help="The input file to be classified.")                        
     args = parser.parse_args()
     
     action = args.action
     check = args.check
     dataset_root_dir = args.dataset_root_dir
     batch_size = args.batch_size
+    num_classes = args.num_classes
+    input_image = args.input_image
 
-    if dataset_root_dir is None:
-        raise ValueError('ERROR: parameter dataset_root_dir not specified. Check syntax with --help')
-    files_train_path = os.path.join(dataset_root_dir, DATASET_TRAIN_SUBDIR)
+    if action == ACTION_TRAIN or action == ACTION_EVALUATE:
+        if dataset_root_dir is None:
+            raise ValueError('ERROR: parameter dataset_root_dir not specified. Check syntax with --help')
+        files_train_path = os.path.join(dataset_root_dir, DATASET_TRAIN_SUBDIR)
 
-    train_df = pd.DataFrame({"file": os.listdir(files_train_path)})
-    train_df["label"] = train_df["file"].apply(lambda x: x.split(".")[0])
-    print(train_df.head())
+        train_df = pd.DataFrame({"file": os.listdir(files_train_path)})
+        train_df["label"] = train_df["file"].apply(lambda x: x.split(".")[0])
+        print(train_df.head())
 
-    # test_df = pd.DataFrame({"file": os.listdir(FILES_TEST)})
-    # print(test_df.head())
+        # test_df = pd.DataFrame({"file": os.listdir(FILES_TEST)})
+        # print(test_df.head())
 
-    fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
-    ax.set_facecolor("#e5e5e5")
-    sns.countplot(x = "label", data = train_df, ax = ax)
-    ax.set_title("Distribution of Class Labels")
-    sns.despine()
-    logger.debug("Saving Distribution Diagram to file {}...".format(FILE_DISTRIBUTION))
-    plt.savefig(FILE_DISTRIBUTION)
-    plt.close()
-
-
-    fig = plt.figure(1, figsize = (8, 8))
-    fig.suptitle("Training Set Images (Sample)")
-    for i in range(25):
-        plt.subplot(5, 5, i + 1)
-        fn = os.path.join(files_train_path, train_df["file"][i])
-        image = load_img(fn)
-        plt.imshow(image)
-        plt.axis("off")
-    plt.tight_layout()
-    logger.debug("Saving samples to file {}...".format(FILE_SAMPLES))
-    plt.savefig(FILE_SAMPLES)
-    plt.close()
+        fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
+        ax.set_facecolor("#e5e5e5")
+        sns.countplot(x = "label", data = train_df, ax = ax)
+        ax.set_title("Distribution of Class Labels")
+        sns.despine()
+        logger.debug("Saving Distribution Diagram to file {}...".format(FILE_DISTRIBUTION))
+        plt.savefig(FILE_DISTRIBUTION)
+        plt.close()
 
 
-    fig = plt.figure(1, figsize = (8, 8))
-    fig.suptitle("Sample Dog images from Training Set")
-    for i in range(25):
-        plt.subplot(5, 5, i + 1)
-        fn = os.path.join(files_train_path, train_df.query("label == 'dog'").file.values[i])
-        image = load_img(fn)
-        plt.imshow(image)
-        plt.axis("off")
-    plt.tight_layout()
-    logger.debug("Saving Sample Dog images from Training Set to file {}...".format(FILE_SAMPLES_DOGS))
-    plt.savefig(FILE_SAMPLES_DOGS)
-    plt.close()
-
-    fig = plt.figure(1, figsize = (8, 8))
-    fig.suptitle("Sample Cat images from Training Set")
-    for i in range(25):
-        plt.subplot(5, 5, i + 1)
-        fn = os.path.join(files_train_path, train_df.query("label == 'cat'").file.values[i])
-        image = load_img(fn)
-        plt.imshow(image)
-        plt.axis("off")
-    plt.tight_layout()
-    logger.debug("Saving Sample Cats images from Training Set to file {}...".format(FILE_SAMPLES_CATS))
-    plt.savefig(FILE_SAMPLES_CATS)
-    plt.close()
+        fig = plt.figure(1, figsize = (8, 8))
+        fig.suptitle("Training Set Images (Sample)")
+        for i in range(25):
+            plt.subplot(5, 5, i + 1)
+            fn = os.path.join(files_train_path, train_df["file"][i])
+            image = load_img(fn)
+            plt.imshow(image)
+            plt.axis("off")
+        plt.tight_layout()
+        logger.debug("Saving samples to file {}...".format(FILE_SAMPLES))
+        plt.savefig(FILE_SAMPLES)
+        plt.close()
 
 
-    train_data, val_data = train_test_split(train_df, 
-                                            test_size = 0.2, 
-                                            stratify = train_df["label"], 
-                                            random_state = SEED)
-    logger.debug("train_data.shape={}".format(train_data.shape))
-    # datagen = ImageDataGenerator(
-    #     rotation_range = 30, 
-    #     width_shift_range = 0.1,
-    #     height_shift_range = 0.1, 
-    #     brightness_range = (0.5, 1), 
-    #     zoom_range = 0.2,
-    #     horizontal_flip = True, 
-    #     rescale = 1./255,
-    # )
-    # sample_df = train_data.sample(1)
-    # sample_generator = datagen.flow_from_dataframe(
-    #     dataframe = sample_df,
-    #     directory = FILES + "train/",
-    #     x_col = "file",
-    #     y_col = "label",
-    #     class_mode = "categorical",
-    #     target_size = (224, 224),
-    #     seed = SEED
-    # )
+        fig = plt.figure(1, figsize = (8, 8))
+        fig.suptitle("Sample Dog images from Training Set")
+        for i in range(25):
+            plt.subplot(5, 5, i + 1)
+            fn = os.path.join(files_train_path, train_df.query("label == 'dog'").file.values[i])
+            image = load_img(fn)
+            plt.imshow(image)
+            plt.axis("off")
+        plt.tight_layout()
+        logger.debug("Saving Sample Dog images from Training Set to file {}...".format(FILE_SAMPLES_DOGS))
+        plt.savefig(FILE_SAMPLES_DOGS)
+        plt.close()
 
-    # fig = plt.figure(figsize = (14, 8))
-    # fig.suptitle("Augmentation techniques")
-    # for i in range(50):
-    #     plt.subplot(5, 10, i + 1)
-    #     for X, y in sample_generator:
-    #         plt.imshow(X[0])
-    #         plt.axis("off")
-    #         break
-    # plt.tight_layout()
-    # if check:
-    #     plt.show()
-    # else:
-    #     logger.debug("Saving augmentation samples to file {}...".format(FILE_AUGMENT))
-    #     plt.savefig(FILE_AUGMENT)
-    #     plt.close()
+        fig = plt.figure(1, figsize = (8, 8))
+        fig.suptitle("Sample Cat images from Training Set")
+        for i in range(25):
+            plt.subplot(5, 5, i + 1)
+            fn = os.path.join(files_train_path, train_df.query("label == 'cat'").file.values[i])
+            image = load_img(fn)
+            plt.imshow(image)
+            plt.axis("off")
+        plt.tight_layout()
+        logger.debug("Saving Sample Cats images from Training Set to file {}...".format(FILE_SAMPLES_CATS))
+        plt.savefig(FILE_SAMPLES_CATS)
+        plt.close()
 
-    train_datagen = ImageDataGenerator(
-        rotation_range = 15, 
-    #     width_shift_range = 0.1,
-    #     height_shift_range = 0.1, 
-    #     brightness_range = (0.5, 1), 
-    #     zoom_range = 0.1,
-        horizontal_flip = True,
-        preprocessing_function = preprocess_input
-    )
 
-    val_datagen = ImageDataGenerator(preprocessing_function = preprocess_input)
-    train_generator = train_datagen.flow_from_dataframe(
-        dataframe = train_data,
-        directory = files_train_path,
-        x_col = "file",
-        y_col = "label",
-        class_mode = "categorical",
-        target_size = (224, 224),
-        batch_size = batch_size,
-        seed = SEED,
-    )
+        train_data, val_data = train_test_split(train_df, 
+                                                test_size = 0.2, 
+                                                stratify = train_df["label"], 
+                                                random_state = SEED)
+        logger.debug("train_data.shape={}".format(train_data.shape))
+        # datagen = ImageDataGenerator(
+        #     rotation_range = 30, 
+        #     width_shift_range = 0.1,
+        #     height_shift_range = 0.1, 
+        #     brightness_range = (0.5, 1), 
+        #     zoom_range = 0.2,
+        #     horizontal_flip = True, 
+        #     rescale = 1./255,
+        # )
+        # sample_df = train_data.sample(1)
+        # sample_generator = datagen.flow_from_dataframe(
+        #     dataframe = sample_df,
+        #     directory = FILES + "train/",
+        #     x_col = "file",
+        #     y_col = "label",
+        #     class_mode = "categorical",
+        #     target_size = (224, 224),
+        #     seed = SEED
+        # )
 
-    val_generator = val_datagen.flow_from_dataframe(
-        dataframe = val_data,
-        directory = files_train_path,
-        x_col = "file",
-        y_col = "label",
-        class_mode = "categorical",
-        target_size = (224, 224),
-        batch_size = batch_size,
-        seed = SEED,
-        shuffle = False
-    )
+        # fig = plt.figure(figsize = (14, 8))
+        # fig.suptitle("Augmentation techniques")
+        # for i in range(50):
+        #     plt.subplot(5, 10, i + 1)
+        #     for X, y in sample_generator:
+        #         plt.imshow(X[0])
+        #         plt.axis("off")
+        #         break
+        # plt.tight_layout()
+        # if check:
+        #     plt.show()
+        # else:
+        #     logger.debug("Saving augmentation samples to file {}...".format(FILE_AUGMENT))
+        #     plt.savefig(FILE_AUGMENT)
+        #     plt.close()
+
+        train_datagen = ImageDataGenerator(
+            rotation_range = 15, 
+        #     width_shift_range = 0.1,
+        #     height_shift_range = 0.1, 
+        #     brightness_range = (0.5, 1), 
+        #     zoom_range = 0.1,
+            horizontal_flip = True,
+            preprocessing_function = preprocess_input
+        )
+
+        val_datagen = ImageDataGenerator(preprocessing_function = preprocess_input)
+        train_generator = train_datagen.flow_from_dataframe(
+            dataframe = train_data,
+            directory = files_train_path,
+            x_col = "file",
+            y_col = "label",
+            class_mode = "categorical",
+            target_size = (224, 224),
+            batch_size = batch_size,
+            seed = SEED,
+        )
+
+        val_generator = val_datagen.flow_from_dataframe(
+            dataframe = val_data,
+            directory = files_train_path,
+            x_col = "file",
+            y_col = "label",
+            class_mode = "categorical",
+            target_size = (224, 224),
+            batch_size = batch_size,
+            seed = SEED,
+            shuffle = False
+        )
 
     if action == ACTION_TRAIN:
-        num_classes = args.num_classes
-
         tf.keras.backend.clear_session()
         for layer in base_model.layers:
             layer.trainable = False
@@ -352,6 +357,39 @@ def main():
         plt.close()
 
         tf.keras.backend.clear_session()
+
+    elif action == ACTION_PREDICT:
+        if input_image is None:
+            raise("ERROR: input_image must be provided. Check syntax with --help.")
+        tf.keras.backend.clear_session()
+        model = vgg16_pretrained()
+        model.load_weights(FILES_WEIGHTS)
+
+        # predict
+        image = load_img(input_image, target_size=(224, 224))
+        plt.imshow(image)
+        plt.show()
+
+        from tensorflow.keras.preprocessing.image import img_to_array
+        from tensorflow.keras.applications.vgg16 import decode_predictions
+
+        image = img_to_array(image)
+        # reshape data for the model
+        image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
+        pred = model.predict(image)
+        print(type(pred))
+        print(pred)
+        im_class = np.argmax(pred)
+        print(im_class)
+
+        # # convert the probabilities to class labels
+        label = decode_predictions(pred)
+        # # retrieve the most likely result, e.g. highest probability
+        # label = label[0][0]
+        # # print the classification
+        # print('%s (%.2f%%)' % (label[1], label[2]*100))
+        # image = preprocess_input(image)
+
 
     elif action == ACTION_EVALUATE:
         tf.keras.backend.clear_session()
