@@ -1,3 +1,4 @@
+@echo off
 REM clean
 del perf_*
 del pred_*
