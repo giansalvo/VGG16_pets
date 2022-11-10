@@ -1,4 +1,30 @@
-# adapted from Sarit Rath https://www.kaggle.com/code/saritrath/cats-vs-dogs-vgg-16
+"""
+    Neural Network implementation for image classification
+
+    Copyright (c) 2022 Giansalvo Gusinu
+    Copyright (c) Sarit Rath 
+
+    Code adapted from following articles/repositories:
+    https://www.kaggle.com/code/saritrath/cats-vs-dogs-vgg-16
+
+    Permission is hereby granted, free of charge, to any person obtaining a 
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+"""
 import argparse
 import logging
 import pandas as pd
@@ -8,7 +34,6 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import random
-import zipfile
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, classification_report 
 import tensorflow as tf
@@ -24,15 +49,12 @@ from keras.models import Model
 
 SEED = 666
 
-BATCH_SIZE = 128
+BATCH_SIZE_DEFAULT = 128
+NUM_CLASSES_DEFAULT = 2
 INPUT_SHAPE =(224,224,3)
 
-TRAIN_PATH = "./train.zip"
-TEST_PATH = "./test1.zip"
 
-FILES = "./Images/"
-FILES_TRAIN = "./Images/train"
-FILES_TEST = "./Images/test1"
+DATASET_TRAIN_SUBDIR = "train"
 FILES_WEIGHTS = "catdog_vgg16.hdf5"
 
 # Output performance file names
@@ -49,13 +71,7 @@ PROGRAM_VERSION = "1.0"
 
 ACTION_TRAIN = "train"
 ACTION_PREDICT = "predict"
-
-def extract_files():
-    with zipfile.ZipFile(TRAIN_PATH, 'r') as zipp:
-        zipp.extractall(FILES)
-        
-    with zipfile.ZipFile(TEST_PATH, 'r') as zipp:
-        zipp.extractall(FILES)
+ACTION_EVALUATE = "evaluate"
 
 base_model = VGG16(
     weights = "imagenet", 
@@ -64,14 +80,14 @@ base_model = VGG16(
 )
 
 
-def vgg16_pretrained():
+def vgg16_pretrained(num_classes=2):
     model= Sequential([
         base_model,
         GlobalAveragePooling2D(),
-        Dense(100,activation='relu'),
+        Dense(100, activation='relu'),
         Dropout(0.4),
-        Dense(64,activation='relu'),
-        Dense(2,activation='softmax')
+        Dense(64, activation='relu'),
+        Dense(num_classes, activation='softmax')
     ])
     return model
 
@@ -115,28 +131,37 @@ def main():
         description=COPYRIGHT_NOTICE,
         epilog = "Examples:\n"
                 "       Train the network\n"
-                "         $python %(prog)s train\n"
+                "         $python %(prog)s train -dr dataset_root_folder [-b batch_size] [-c num_classes]\n"
                 "\n"
                 "       Make predictions and compute confusion matrix\n"
-                "         $python %(prog)s predict\n"
+                "         $python %(prog)s predict -dr dataset_root_folder\n"
                 "\n",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--version', action='version', version='%(prog)s v.' + PROGRAM_VERSION)
     parser.add_argument("action", help="The action to be performed.")
     parser.add_argument('--check', dest='check', default=False, action='store_true',
                     help="Display some images from dataset before training to check that dataset is ok.")
-
+    parser.add_argument('-dr', '--dataset_root_dir', required=False, help="The root directory of the dataset.")
+    parser.add_argument("-b", "--batch_size", required=False, default=BATCH_SIZE_DEFAULT, type=int, help="the number of samples that are passed to the network at once during the training")
+    parser.add_argument('-c', "--num_classes", required=False, default=NUM_CLASSES_DEFAULT, type=int,
+                        help="The number of possible classes for an images.")
     args = parser.parse_args()
     
     action = args.action
     check = args.check
+    dataset_root_dir = args.dataset_root_dir
+    batch_size = args.batch_size
 
-    train_df = pd.DataFrame({"file": os.listdir(FILES_TRAIN)})
+    if dataset_root_dir is None:
+        raise ValueError('ERROR: parameter dataset_root_dir not specified. Check syntax with --help')
+    files_train_path = os.path.join(dataset_root_dir, DATASET_TRAIN_SUBDIR)
+
+    train_df = pd.DataFrame({"file": os.listdir(files_train_path)})
     train_df["label"] = train_df["file"].apply(lambda x: x.split(".")[0])
     print(train_df.head())
 
-    test_df = pd.DataFrame({"file": os.listdir(FILES_TEST)})
-    print(test_df.head())
+    # test_df = pd.DataFrame({"file": os.listdir(FILES_TEST)})
+    # print(test_df.head())
 
     fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
     ax.set_facecolor("#e5e5e5")
@@ -152,7 +177,8 @@ def main():
     fig.suptitle("Training Set Images (Sample)")
     for i in range(25):
         plt.subplot(5, 5, i + 1)
-        image = load_img(FILES + "train/" + train_df["file"][i])
+        fn = os.path.join(files_train_path, train_df["file"][i])
+        image = load_img(fn)
         plt.imshow(image)
         plt.axis("off")
     plt.tight_layout()
@@ -165,7 +191,8 @@ def main():
     fig.suptitle("Sample Dog images from Training Set")
     for i in range(25):
         plt.subplot(5, 5, i + 1)
-        image = load_img(FILES + "train/" + train_df.query("label == 'dog'").file.values[i])
+        fn = os.path.join(files_train_path, train_df.query("label == 'dog'").file.values[i])
+        image = load_img(fn)
         plt.imshow(image)
         plt.axis("off")
     plt.tight_layout()
@@ -177,7 +204,8 @@ def main():
     fig.suptitle("Sample Cat images from Training Set")
     for i in range(25):
         plt.subplot(5, 5, i + 1)
-        image = load_img(FILES + "train/" + train_df.query("label == 'cat'").file.values[i])
+        fn = os.path.join(files_train_path, train_df.query("label == 'cat'").file.values[i])
+        image = load_img(fn)
         plt.imshow(image)
         plt.axis("off")
     plt.tight_layout()
@@ -190,6 +218,7 @@ def main():
                                             test_size = 0.2, 
                                             stratify = train_df["label"], 
                                             random_state = SEED)
+    logger.debug("train_data.shape={}".format(train_data.shape))
     # datagen = ImageDataGenerator(
     #     rotation_range = 30, 
     #     width_shift_range = 0.1,
@@ -239,34 +268,34 @@ def main():
     val_datagen = ImageDataGenerator(preprocessing_function = preprocess_input)
     train_generator = train_datagen.flow_from_dataframe(
         dataframe = train_data,
-        directory = FILES + "train/",
+        directory = files_train_path,
         x_col = "file",
         y_col = "label",
         class_mode = "categorical",
         target_size = (224, 224),
-        batch_size = BATCH_SIZE,
+        batch_size = batch_size,
         seed = SEED,
     )
 
     val_generator = val_datagen.flow_from_dataframe(
         dataframe = val_data,
-        directory = FILES + "train/",
+        directory = files_train_path,
         x_col = "file",
         y_col = "label",
         class_mode = "categorical",
         target_size = (224, 224),
-        batch_size = BATCH_SIZE,
+        batch_size = batch_size,
         seed = SEED,
         shuffle = False
     )
 
     if action == ACTION_TRAIN:
-        for layer in base_model.layers:
-            layer.trainable = False
+        num_classes = args.num_classes
 
         tf.keras.backend.clear_session()
-
-        model = vgg16_pretrained()
+        for layer in base_model.layers:
+            layer.trainable = False
+        model = vgg16_pretrained(num_classes)
         model.compile(loss = "categorical_crossentropy", optimizer = "adam", metrics = "accuracy")
         model.summary()
 
@@ -293,15 +322,23 @@ def main():
             save_weights_only = True
         )
 
+        validation_samples_num = val_data.shape[0]
+        logger.debug("validation_samples_num={}".format(validation_samples_num))
+        validation_steps = val_data.shape[0] // batch_size
+        logger.debug("validation_steps={}".format(validation_steps))
+        steps_per_epoch = train_data.shape[0] // batch_size
+        logger.debug("steps_per_epoch={}".format(steps_per_epoch))
+        if validation_steps == 0:
+            raise ValueError('ERROR: validation_steps is null. Reduce number of batch_size. Check syntax with --help.')
         history = model.fit(
             train_generator,
             epochs = 10, 
             validation_data = val_generator,
-            validation_steps = val_data.shape[0] // BATCH_SIZE,
-            steps_per_epoch = train_data.shape[0] // BATCH_SIZE,
+            validation_steps = validation_steps,
+            steps_per_epoch = steps_per_epoch,
             callbacks = [reduce_lr, early_stopping, checkpoint]
         )
-
+        
         fig, axes = plt.subplots(1, 2, figsize = (12, 4))
         sns.lineplot(x = range(len(history.history["loss"])), y = history.history["loss"], ax = axes[0], label = "Training Loss")
         sns.lineplot(x = range(len(history.history["loss"])), y = history.history["val_loss"], ax = axes[0], label = "Validation Loss")
@@ -315,24 +352,50 @@ def main():
         plt.close()
 
         tf.keras.backend.clear_session()
-        
-    elif action == ACTION_PREDICT:
+
+    elif action == ACTION_EVALUATE:
+        tf.keras.backend.clear_session()
         model = vgg16_pretrained()
         model.load_weights(FILES_WEIGHTS)
 
-        val_pred = model.predict(val_generator, steps = np.ceil(val_data.shape[0] / BATCH_SIZE))
+        # predict all
+        val_pred = model.predict(val_generator, steps = np.ceil(val_data.shape[0] / batch_size))
+
+        # Compute confusion matrix
         val_data.loc[:, "val_pred"] = np.argmax(val_pred, axis = 1)
-
         labels = dict((v, k) for k, v in val_generator.class_indices.items())
-
+        labels_names = []
+        num_classes = len(labels)
+        for i in range(num_classes):
+            labels_names.append(labels[i])
         val_data.loc[:, "val_pred"] = val_data.loc[:, "val_pred"].map(labels)
-
-
         fig, ax = plt.subplots(figsize = (9, 6))
-
         cm = confusion_matrix(val_data["label"], val_data["val_pred"])
 
-        disp = ConfusionMatrixDisplay(confusion_matrix = cm, display_labels = ["cat", "dog"])
+        # Compute performance indexes
+        TP = np.diag(cm)
+        FP = np.sum(cm, axis=0) - TP
+        FN = np.sum(cm, axis=1) - TP
+        TN = []
+        for i in range(num_classes):
+            temp = np.delete(cm, i, 0)    # delete ith row
+            temp = np.delete(temp, i, 1)  # delete ith column
+            TN.append(sum(sum(temp)))
+        # Overall accuracy
+        ACC = (TP+TN)/(TP+FP+FN+TN)
+        # # sanity check
+        # for i in range(num_classes):
+        #     print(TP[i] + FP[i] + FN[i] + TN[i])
+        precision = TP/(TP+FP)
+        recall = TP/(TP+FN)
+        specificity = TN/(TN+FP)
+        print("classes: " + str(labels_names))
+        print("accuracy: " + str(ACC))
+        print("precision: " + str(precision))
+        print("recall: " + str(recall))
+        print("specificity: " + str(specificity))                
+        # Compute and save confusion Matrix diagram
+        disp = ConfusionMatrixDisplay(confusion_matrix = cm, display_labels = labels_names)
         disp.plot(cmap = plt.cm.Blues, ax = ax)
         ax.set_title("Validation Set")
         logger.debug("Saving Confusion Matrix to file {}...".format(FILE_CM))
