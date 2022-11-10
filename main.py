@@ -34,6 +34,15 @@ FILES = "./Images/"
 FILES_TRAIN = "./Images/train"
 FILES_TEST = "./Images/test1"
 FILES_WEIGHTS = "catdog_vgg16.hdf5"
+FILE_AUGMENT = "./perf_augment.png"
+FILE_CM = "./perf_cm.png"
+
+
+# Output performance file names
+FILE_DISTRIBUTION = "./perf_distrib.png"
+FILE_SAMPLES = "./perf_samples.png"
+FILE_SAMPLES_DOGS = "./perf_samples_dogs.png"
+FILE_SAMPLES_CATS = "./perf_samples_cats.png"
 
 # COPYRIGHT NOTICE AND PROGRAM VERSION
 COPYRIGHT_NOTICE = "Copyright (C) 2022 Giansalvo Gusinu"
@@ -106,9 +115,11 @@ def main():
     parser = argparse.ArgumentParser(
         description=COPYRIGHT_NOTICE,
         epilog = "Examples:\n"
-                "       Prepare the dataset directories hierarchy starting from images/annotations initial directories:\n"
-                "         $python %(prog)s split -ir initial_root_dir -dr dataset_root_dir\n"
-                "         $python %(prog)s split -ir initial_root_dir -dr dataset_root_dir -s 0.7 0.1 0.2\n"
+                "       Train the network\n"
+                "         $python %(prog)s train\n"
+                "\n"
+                "       Make predictions and compute confusion matrix\n"
+                "         $python %(prog)s predict\n"
                 "\n",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--version', action='version', version='%(prog)s v.' + PROGRAM_VERSION)
@@ -133,7 +144,6 @@ def main():
     sns.countplot(x = "label", data = train_df, ax = ax)
     ax.set_title("Distribution of Class Labels")
     sns.despine()
-    FILE_DISTRIBUTION = "./perf_distrib.png"
     logger.debug("Saving Distribution Diagram to file {}...".format(FILE_DISTRIBUTION))
     plt.savefig(FILE_DISTRIBUTION)
     plt.close()
@@ -147,7 +157,6 @@ def main():
         plt.imshow(image)
         plt.axis("off")
     plt.tight_layout()
-    FILE_SAMPLES = "./perf_samples.png"
     logger.debug("Saving samples to file {}...".format(FILE_SAMPLES))
     plt.savefig(FILE_SAMPLES)
     plt.close()
@@ -161,7 +170,6 @@ def main():
         plt.imshow(image)
         plt.axis("off")
     plt.tight_layout()
-    FILE_SAMPLES_DOGS = "./perf_samples_dogs.png"
     logger.debug("Saving Sample Dog images from Training Set to file {}...".format(FILE_SAMPLES_DOGS))
     plt.savefig(FILE_SAMPLES_DOGS)
     plt.close()
@@ -174,7 +182,6 @@ def main():
         plt.imshow(image)
         plt.axis("off")
     plt.tight_layout()
-    FILE_SAMPLES_CATS = "./perf_samples_cats.png"
     logger.debug("Saving Sample Cats images from Training Set to file {}...".format(FILE_SAMPLES_CATS))
     plt.savefig(FILE_SAMPLES_CATS)
     plt.close()
@@ -216,7 +223,6 @@ def main():
     if check:
         plt.show()
     else:
-        FILE_AUGMENT = "./perf_augment.png"
         logger.debug("Saving augmentation samples to file {}...".format(FILE_AUGMENT))
         plt.savefig(FILE_AUGMENT)
         plt.close()
@@ -328,7 +334,6 @@ def main():
 
         disp = ConfusionMatrixDisplay(confusion_matrix = cm, display_labels = ["cat", "dog"])
         disp.plot(cmap = plt.cm.Blues, ax = ax)
-        FILE_CM = "./perf_cm.png"
         ax.set_title("Validation Set")
         logger.debug("Saving Confusion Matrix to file {}...".format(FILE_CM))
         plt.savefig(FILE_CM)
