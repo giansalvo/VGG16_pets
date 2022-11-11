@@ -39,23 +39,17 @@ from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, classifica
 import tensorflow as tf
 from keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import load_img
-#from keras.preprocessing.image import load_img, ImageDataGenerator
-from keras.models import Sequential, Model
-from keras.layers import Conv2D, MaxPool2D, Flatten, Dense, GlobalAveragePooling2D, Dropout, BatchNormalization, Input
 from keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
-from keras.applications.vgg16 import VGG16, preprocess_input
-from keras.applications.vgg16 import VGG16
+from keras.applications.vgg16 import preprocess_input
 from keras.models import Model
 from tensorflow.keras.preprocessing.image import img_to_array
-from tensorflow.keras.applications.vgg16 import decode_predictions
 
+from model_keras_VGG16 import create_VGG16_keras
 
 SEED = 666
 
 BATCH_SIZE_DEFAULT = 128
 NUM_CLASSES_DEFAULT = 2
-INPUT_SHAPE =(224,224,3)
-
 
 DATASET_TRAIN_SUBDIR = "train"
 FILES_WEIGHTS = "catdog_vgg16.hdf5"
@@ -76,23 +70,6 @@ ACTION_TRAIN = "train"
 ACTION_PREDICT = "predict"
 ACTION_EVALUATE = "evaluate"
 
-base_model = VGG16(
-    weights = "imagenet", 
-    input_shape = INPUT_SHAPE,
-    include_top = False
-)
-
-
-def vgg16_pretrained(num_classes=2):
-    model= Sequential([
-        base_model,
-        GlobalAveragePooling2D(),
-        Dense(100, activation='relu'),
-        Dropout(0.4),
-        Dense(64, activation='relu'),
-        Dense(num_classes, activation='softmax')
-    ])
-    return model
 
 #########################################
 # Main
@@ -300,10 +277,7 @@ def main():
         )
 
     if action == ACTION_TRAIN:
-        tf.keras.backend.clear_session()
-        for layer in base_model.layers:
-            layer.trainable = False
-        model = vgg16_pretrained(num_classes)
+        model = create_VGG16_keras(num_classes, freeze_base=True)
         model.compile(loss = "categorical_crossentropy", optimizer = "adam", metrics = "accuracy")
         model.summary()
 
@@ -359,13 +333,10 @@ def main():
         plt.savefig(FILE_ACCURACY)
         plt.close()
 
-        tf.keras.backend.clear_session()
-
     elif action == ACTION_PREDICT:
         if input_image is None:
             raise("ERROR: input_image must be provided. Check syntax with --help.")
-        tf.keras.backend.clear_session()
-        model = vgg16_pretrained()
+        model = create_VGG16_keras(num_classes)
         model.load_weights(FILES_WEIGHTS)
 
         # predict
@@ -378,8 +349,7 @@ def main():
         print("Image of classe: {}".format(im_class))
 
     elif action == ACTION_EVALUATE:
-        tf.keras.backend.clear_session()
-        model = vgg16_pretrained()
+        model = create_VGG16_keras(num_classes)
         model.load_weights(FILES_WEIGHTS)
 
         # predict all
