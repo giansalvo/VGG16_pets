@@ -52,7 +52,7 @@ BATCH_SIZE_DEFAULT = 128
 NUM_CLASSES_DEFAULT = 2
 
 DATASET_TRAIN_SUBDIR = "train"
-FILES_WEIGHTS = "catdog_vgg16.hdf5"
+FILES_WEIGHTS = "weights.hdf5"
 
 # Output performance file names
 FILE_AUGMENT = "./perf_augment.png"
@@ -111,13 +111,13 @@ def main():
         description=COPYRIGHT_NOTICE,
         epilog = "Examples:\n"
                 "       Train the network\n"
-                "         $python %(prog)s train -dr dataset_root_folder [-b batch_size] [-c num_classes]\n"
+                "         $python %(prog)s train -dr dataset_root_folder -w weights_file [-b batch_size] [-c num_classes]\n"
                 "\n"
                 "       Make prediction for an image\n"
-                "         $python %(prog)s predict -i input_image [-c num_classes]\n"
+                "         $python %(prog)s predict -i input_image -w weights_file [-c num_classes]\n"
                 "\n"
                 "       Evaluate the network and compute confusion matrix and performance indexes\n"
-                "         $python %(prog)s evaluate -dr dataset_root_folder\n"
+                "         $python %(prog)s evaluate -dr dataset_root_folder -w weights_file\n"
                 "\n",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--version', action='version', version='%(prog)s v.' + PROGRAM_VERSION)
@@ -128,7 +128,10 @@ def main():
     parser.add_argument("-b", "--batch_size", required=False, default=BATCH_SIZE_DEFAULT, type=int, help="the number of samples that are passed to the network at once during the training")
     parser.add_argument('-c', "--num_classes", required=False, default=NUM_CLASSES_DEFAULT, type=int,
                         help="The number of possible classes for an images.")
-    parser.add_argument("-i", "--input_image", required=False, help="The input file to be classified.")                        
+    parser.add_argument("-i", "--input_image", required=False, help="The input file to be classified.")
+    parser.add_argument("-w", "--weigths_file", required=False, default=FILES_WEIGHTS,
+                        help="The file where the network weights will be saved. It must be compatible with the network model chosen.")
+                     
     args = parser.parse_args()
     
     action = args.action
@@ -137,6 +140,7 @@ def main():
     batch_size = args.batch_size
     num_classes = args.num_classes
     input_image = args.input_image
+    weights_fname = args.weigths_file
 
     if action == ACTION_TRAIN or action == ACTION_EVALUATE:
         if dataset_root_dir is None:
@@ -298,7 +302,7 @@ def main():
 
         checkpoint = ModelCheckpoint(
             monitor = "val_accuracy",
-            filepath = FILES_WEIGHTS,
+            filepath = weights_fname,
             verbose = 1,
             save_best_only = True, 
             save_weights_only = True
@@ -337,7 +341,7 @@ def main():
         if input_image is None:
             raise("ERROR: input_image must be provided. Check syntax with --help.")
         model = create_VGG16_keras(num_classes)
-        model.load_weights(FILES_WEIGHTS)
+        model.load_weights(weights_fname)
 
         # predict
         image = load_img(input_image, target_size=(224, 224))
@@ -350,7 +354,7 @@ def main():
 
     elif action == ACTION_EVALUATE:
         model = create_VGG16_keras(num_classes)
-        model.load_weights(FILES_WEIGHTS)
+        model.load_weights(weights_fname)
 
         # predict all
         val_pred = model.predict(val_generator, steps = np.ceil(val_data.shape[0] / batch_size))
