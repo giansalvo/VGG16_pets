@@ -46,6 +46,9 @@ from keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
 from keras.applications.vgg16 import VGG16, preprocess_input
 from keras.applications.vgg16 import VGG16
 from keras.models import Model
+from tensorflow.keras.preprocessing.image import img_to_array
+from tensorflow.keras.applications.vgg16 import decode_predictions
+
 
 SEED = 666
 
@@ -367,29 +370,12 @@ def main():
 
         # predict
         image = load_img(input_image, target_size=(224, 224))
-        plt.imshow(image)
-        plt.show()
-
-        from tensorflow.keras.preprocessing.image import img_to_array
-        from tensorflow.keras.applications.vgg16 import decode_predictions
-
         image = img_to_array(image)
         # reshape data for the model
         image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
         pred = model.predict(image)
-        print(type(pred))
-        print(pred)
         im_class = np.argmax(pred)
-        print(im_class)
-
-        # # convert the probabilities to class labels
-        label = decode_predictions(pred)
-        # # retrieve the most likely result, e.g. highest probability
-        # label = label[0][0]
-        # # print the classification
-        # print('%s (%.2f%%)' % (label[1], label[2]*100))
-        # image = preprocess_input(image)
-
+        print("Image of classe: {}".format(im_class))
 
     elif action == ACTION_EVALUATE:
         tf.keras.backend.clear_session()
