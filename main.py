@@ -46,6 +46,7 @@ from tensorflow.keras.preprocessing.image import img_to_array
 
 from model_keras_VGG16 import create_VGG16_keras
 from model_VGG16_rt import create_model_VGG16_rt
+from model_keras_ResNet50 import create_ResNet50_keras
 
 SEED = 666
 
@@ -70,8 +71,9 @@ ACTION_TRAIN = "train"
 ACTION_PREDICT = "predict"
 ACTION_EVALUATE = "evaluate"
 
-MODEL_VGG16_KERAS = "vgg16_keras"
+MODEL_VGG16_KERAS = "vgg16"
 MODEL_VGG16_RT = "vgg16_rt"
+MODEL_RESNET50_KERAS = "resnet50"
 
 #########################################
 # Main
@@ -134,7 +136,7 @@ def main():
     parser.add_argument("-w", "--weigths_file", required=False, default=FILES_WEIGHTS,
                         help="The file where the network weights will be saved. It must be compatible with the network model chosen.")
     parser.add_argument('-m', "--model", required=False,
-                        choices=(MODEL_VGG16_KERAS, MODEL_VGG16_RT), 
+                        choices=(MODEL_VGG16_KERAS, MODEL_VGG16_RT, MODEL_RESNET50_KERAS), 
                         help="The model of network to be created/used. It must be compatible with the weigths file.")
 
                      
@@ -278,6 +280,8 @@ def main():
             model = create_VGG16_keras(num_classes, freeze_base=True)
         elif network_model == MODEL_VGG16_RT:
             model = create_model_VGG16_rt(num_classes)
+        elif network_model == MODEL_RESNET50_KERAS:
+            model = create_ResNet50_keras(num_classes)
         else:
             raise ("ERROR: network model not recognized. Check syntax with --help.")
         model.compile(loss = "categorical_crossentropy", optimizer = "adam", metrics = "accuracy")
@@ -342,6 +346,8 @@ def main():
             model = create_VGG16_keras(num_classes, freeze_base=True)
         elif network_model == MODEL_VGG16_RT:
             model = create_model_VGG16_rt(num_classes)
+        elif network_model == MODEL_RESNET50_KERAS:
+            model = create_ResNet50_keras(num_classes)
         else:
             raise ("ERROR: network model not recognized. Check syntax with --help.")
 
@@ -354,13 +360,15 @@ def main():
         image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
         pred = model.predict(image)
         im_class = np.argmax(pred)
-        print("Image of classe: {}".format(im_class))
+        print("Image classe: {}".format(im_class))
 
     elif action == ACTION_EVALUATE:
         if network_model == MODEL_VGG16_KERAS:
             model = create_VGG16_keras(num_classes, freeze_base=True)
         elif network_model == MODEL_VGG16_RT:
             model = create_model_VGG16_rt(num_classes)
+        elif network_model == MODEL_RESNET50_KERAS:
+            model = create_ResNet50_keras(num_classes)
         else:
             raise ("ERROR: network model not recognized. Check syntax with --help.")
 
