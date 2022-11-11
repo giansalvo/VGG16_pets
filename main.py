@@ -45,6 +45,7 @@ from keras.models import Model
 from tensorflow.keras.preprocessing.image import img_to_array
 
 from model_keras_VGG16 import create_VGG16_keras
+from model_VGG16_rt import create_model_VGG16_rt
 
 SEED = 666
 
@@ -69,6 +70,8 @@ ACTION_TRAIN = "train"
 ACTION_PREDICT = "predict"
 ACTION_EVALUATE = "evaluate"
 
+MODEL_VGG16_KERAS = "vgg16_keras"
+MODEL_VGG16_RT = "vgg16_rt"
 
 #########################################
 # Main
@@ -110,13 +113,13 @@ def main():
         description=COPYRIGHT_NOTICE,
         epilog = "Examples:\n"
                 "       Train the network\n"
-                "         $python %(prog)s train -dr dataset_root_folder -w weights_file [-b batch_size] [-c num_classes]\n"
+                "         $python %(prog)s train -m network_model -dr dataset_root_folder -w weights_file [-b batch_size] [-c num_classes]\n"
                 "\n"
                 "       Make prediction for an image\n"
-                "         $python %(prog)s predict -i input_image -w weights_file [-c num_classes]\n"
+                "         $python %(prog)s predict -m network_model -i input_image -w weights_file [-c num_classes]\n"
                 "\n"
                 "       Evaluate the network and compute confusion matrix and performance indexes\n"
-                "         $python %(prog)s evaluate -dr dataset_root_folder -w weights_file\n"
+                "         $python %(prog)s evaluate -m network_model -dr dataset_root_folder -w weights_file\n"
                 "\n",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--version', action='version', version='%(prog)s v.' + PROGRAM_VERSION)
@@ -130,6 +133,10 @@ def main():
     parser.add_argument("-i", "--input_image", required=False, help="The input file to be classified.")
     parser.add_argument("-w", "--weigths_file", required=False, default=FILES_WEIGHTS,
                         help="The file where the network weights will be saved. It must be compatible with the network model chosen.")
+    parser.add_argument('-m', "--model", required=False,
+                        choices=(MODEL_VGG16_KERAS, MODEL_VGG16_RT), 
+                        help="The model of network to be created/used. It must be compatible with the weigths file.")
+
                      
     args = parser.parse_args()
     
@@ -140,6 +147,7 @@ def main():
     num_classes = args.num_classes
     input_image = args.input_image
     weights_fname = args.weigths_file
+    network_model = args.model
 
     if action == ACTION_TRAIN or action == ACTION_EVALUATE:
         if dataset_root_dir is None:
@@ -266,7 +274,12 @@ def main():
         )
 
     if action == ACTION_TRAIN:
-        model = create_VGG16_keras(num_classes, freeze_base=True)
+        if network_model == MODEL_VGG16_KERAS:
+            model = create_VGG16_keras(num_classes, freeze_base=True)
+        elif network_model == MODEL_VGG16_RT:
+            model = create_model_VGG16_rt(num_classes)
+        else:
+            raise ("ERROR: network model not recognized. Check syntax with --help.")
         model.compile(loss = "categorical_crossentropy", optimizer = "adam", metrics = "accuracy")
         model.summary()
 
@@ -325,7 +338,13 @@ def main():
     elif action == ACTION_PREDICT:
         if input_image is None:
             raise("ERROR: input_image must be provided. Check syntax with --help.")
-        model = create_VGG16_keras(num_classes)
+        if network_model == MODEL_VGG16_KERAS:
+            model = create_VGG16_keras(num_classes, freeze_base=True)
+        elif network_model == MODEL_VGG16_RT:
+            model = create_model_VGG16_rt(num_classes)
+        else:
+            raise ("ERROR: network model not recognized. Check syntax with --help.")
+
         model.load_weights(weights_fname)
 
         # predict
@@ -338,7 +357,13 @@ def main():
         print("Image of classe: {}".format(im_class))
 
     elif action == ACTION_EVALUATE:
-        model = create_VGG16_keras(num_classes)
+        if network_model == MODEL_VGG16_KERAS:
+            model = create_VGG16_keras(num_classes, freeze_base=True)
+        elif network_model == MODEL_VGG16_RT:
+            model = create_model_VGG16_rt(num_classes)
+        else:
+            raise ("ERROR: network model not recognized. Check syntax with --help.")
+
         model.load_weights(weights_fname)
 
         # predict all
