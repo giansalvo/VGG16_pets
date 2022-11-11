@@ -60,7 +60,6 @@ FILE_CM = "./perf_cm.png"
 FILE_DISTRIBUTION = "./perf_distrib.png"
 FILE_SAMPLES = "./perf_samples.png"
 FILE_SAMPLES_DOGS = "./perf_samples_dogs.png"
-FILE_SAMPLES_CATS = "./perf_samples_cats.png"
 
 # COPYRIGHT NOTICE AND PROGRAM VERSION
 COPYRIGHT_NOTICE = "Copyright (C) 2022 Giansalvo Gusinu"
@@ -147,6 +146,7 @@ def main():
             raise ValueError('ERROR: parameter dataset_root_dir not specified. Check syntax with --help')
         files_train_path = os.path.join(dataset_root_dir, DATASET_TRAIN_SUBDIR)
 
+        print("File in the dataset (print only some):")
         train_df = pd.DataFrame({"file": os.listdir(files_train_path)})
         train_df["label"] = train_df["file"].apply(lambda x: x.split(".")[0])
         print(train_df.head())
@@ -154,16 +154,16 @@ def main():
         # test_df = pd.DataFrame({"file": os.listdir(FILES_TEST)})
         # print(test_df.head())
 
+        logger.debug("Saving Distribution Diagram to file {}...".format(FILE_DISTRIBUTION))
         fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
         ax.set_facecolor("#e5e5e5")
         sns.countplot(x = "label", data = train_df, ax = ax)
         ax.set_title("Distribution of Class Labels")
         sns.despine()
-        logger.debug("Saving Distribution Diagram to file {}...".format(FILE_DISTRIBUTION))
         plt.savefig(FILE_DISTRIBUTION)
         plt.close()
 
-
+        logger.debug("Saving samples to file {}...".format(FILE_SAMPLES))
         fig = plt.figure(1, figsize = (8, 8))
         fig.suptitle("Training Set Images (Sample)")
         for i in range(25):
@@ -173,11 +173,10 @@ def main():
             plt.imshow(image)
             plt.axis("off")
         plt.tight_layout()
-        logger.debug("Saving samples to file {}...".format(FILE_SAMPLES))
         plt.savefig(FILE_SAMPLES)
         plt.close()
 
-
+        logger.debug("Saving Sample Dog images from Training Set to file {}...".format(FILE_SAMPLES_DOGS))
         fig = plt.figure(1, figsize = (8, 8))
         fig.suptitle("Sample Dog images from Training Set")
         for i in range(25):
@@ -187,21 +186,7 @@ def main():
             plt.imshow(image)
             plt.axis("off")
         plt.tight_layout()
-        logger.debug("Saving Sample Dog images from Training Set to file {}...".format(FILE_SAMPLES_DOGS))
         plt.savefig(FILE_SAMPLES_DOGS)
-        plt.close()
-
-        fig = plt.figure(1, figsize = (8, 8))
-        fig.suptitle("Sample Cat images from Training Set")
-        for i in range(25):
-            plt.subplot(5, 5, i + 1)
-            fn = os.path.join(files_train_path, train_df.query("label == 'cat'").file.values[i])
-            image = load_img(fn)
-            plt.imshow(image)
-            plt.axis("off")
-        plt.tight_layout()
-        logger.debug("Saving Sample Cats images from Training Set to file {}...".format(FILE_SAMPLES_CATS))
-        plt.savefig(FILE_SAMPLES_CATS)
         plt.close()
 
 
@@ -380,18 +365,24 @@ def main():
             temp = np.delete(temp, i, 1)  # delete ith column
             TN.append(sum(sum(temp)))
         # Overall accuracy
-        ACC = (TP+TN)/(TP+FP+FN+TN)
+        accuracy = (TP+TN)/(TP+FP+FN+TN)
         # # sanity check
         # for i in range(num_classes):
         #     print(TP[i] + FP[i] + FN[i] + TN[i])
         precision = TP/(TP+FP)
         recall = TP/(TP+FN)
         specificity = TN/(TN+FP)
-        print("classes: " + str(labels_names))
-        print("accuracy: " + str(ACC))
-        print("precision: " + str(precision))
-        print("recall: " + str(recall))
-        print("specificity: " + str(specificity))                
+        fn, fext = os.path.splitext(os.path.basename(weights_fname))
+        fn_perf = "perf_" + fn + ".txt"    
+         # Print results to file
+        logger.debug("Saving performace indexes to file {}...".format(fn_perf))
+        print("\nEvaluation on validation set:", file=open(fn_perf, 'a'))
+        print("classes: " + str(labels_names), file=open(fn_perf, 'a'))
+        print("accuracy: " + str(accuracy), file=open(fn_perf, 'a'))
+        print("precision: " + str(precision), file=open(fn_perf, 'a'))
+        print("recall: " + str(recall), file=open(fn_perf, 'a'))
+        print("specificity: " + str(specificity), file=open(fn_perf, 'a'))
+         
         # Compute and save confusion Matrix diagram
         disp = ConfusionMatrixDisplay(confusion_matrix = cm, display_labels = labels_names)
         disp.plot(cmap = plt.cm.Blues, ax = ax)
