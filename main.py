@@ -54,13 +54,16 @@ BATCH_SIZE_DEFAULT = 128
 NUM_CLASSES_DEFAULT = 2
 
 DATASET_TRAIN_SUBDIR = "train"
+DATASET_TEST_SUBDIR = "test"
 FILES_WEIGHTS = "weights.hdf5"
 
 # Output performance file names
 FILE_AUGMENT = "./perf_augment.png"
-FILE_CM = "./perf_cm.png"
-FILE_DISTRIBUTION = "./perf_distrib.png"
+FILE_CM_TEST = "./perf_cm_test.png"
+FILE_DISTRIBUTION_TRAIN = "./perf_distrib_train.png"
+FILE_DISTRIBUTION_TEST = "./perf_distrib_test.png"
 FILE_SAMPLES = "./perf_samples.png"
+FILE_SAMPLES_TEST = "./perf_samples_test.png"
 FILE_SAMPLES_DOGS = "./perf_samples_dogs.png"
 
 # COPYRIGHT NOTICE AND PROGRAM VERSION
@@ -74,6 +77,9 @@ ACTION_EVALUATE = "evaluate"
 MODEL_VGG16_KERAS = "vgg16"
 MODEL_VGG16_RT = "vgg16_rt"
 MODEL_RESNET50_KERAS = "resnet50"
+
+def listdir_fullpath(d):
+    return [os.path.join(d, f) for f in os.listdir(d)]
 
 #########################################
 # Main
@@ -151,26 +157,35 @@ def main():
     weights_fname = args.weigths_file
     network_model = args.model
 
-    if action == ACTION_TRAIN or action == ACTION_EVALUATE:
+    if action == ACTION_TRAIN:
         if dataset_root_dir is None:
             raise ValueError('ERROR: parameter dataset_root_dir not specified. Check syntax with --help')
         files_train_path = os.path.join(dataset_root_dir, DATASET_TRAIN_SUBDIR)
 
-        print("File in the dataset (print only some):")
+        # Prepare train dataframe
+        # labels = [ item for item in os.listdir(files_train_path) if os.path.isdir(os.path.join(files_train_path, item)) ]
+        # logger.debug("Found labels: " +str(labels))
+        # train_df = pd.DataFrame()
+        # for item in labels:
+        #     dir = os.path.join(files_train_path, item)
+        #     df = pd.DataFrame({"file": listdir_fullpath(dir)})
+        #     df["label"] = df["file"].apply(lambda x: item)
+        #     train_df = pd.concat([train_df, df])
         train_df = pd.DataFrame({"file": os.listdir(files_train_path)})
         train_df["label"] = train_df["file"].apply(lambda x: x.split(".")[0])
+        print("File in the dataset (print only some):")
         print(train_df.head())
 
         # test_df = pd.DataFrame({"file": os.listdir(FILES_TEST)})
         # print(test_df.head())
 
-        logger.debug("Saving Distribution Diagram to file {}...".format(FILE_DISTRIBUTION))
+        logger.debug("Saving Distribution Diagram to file {}...".format(FILE_DISTRIBUTION_TRAIN))
         fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
         ax.set_facecolor("#e5e5e5")
         sns.countplot(x = "label", data = train_df, ax = ax)
         ax.set_title("Distribution of Class Labels")
         sns.despine()
-        plt.savefig(FILE_DISTRIBUTION)
+        plt.savefig(FILE_DISTRIBUTION_TRAIN)
         plt.close()
 
         logger.debug("Saving samples to file {}...".format(FILE_SAMPLES))
@@ -275,7 +290,6 @@ def main():
             shuffle = False
         )
 
-    if action == ACTION_TRAIN:
         if network_model == MODEL_VGG16_KERAS:
             model = create_VGG16_keras(num_classes, freeze_base=True)
         elif network_model == MODEL_VGG16_RT:
@@ -372,21 +386,68 @@ def main():
         else:
             raise ("ERROR: network model not recognized. Check syntax with --help.")
 
+        if dataset_root_dir is None:
+            raise ValueError('ERROR: parameter dataset_root_dir not specified. Check syntax with --help')
+        files_test_path = os.path.join(dataset_root_dir, DATASET_TEST_SUBDIR)
+
+
+        test_df = pd.DataFrame({"file": os.listdir(files_test_path)})
+        test_df["label"] = test_df["file"].apply(lambda x: x.split(".")[0])
+        print("File in the dataset (print only some):")
+        print(test_df.head())
+
+        logger.debug("Saving Distribution Diagram to file {}...".format(FILE_DISTRIBUTION_TEST))
+        fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
+        ax.set_facecolor("#e5e5e5")
+        sns.countplot(x = "label", data = test_df, ax = ax)
+        ax.set_title("Distribution of Class Labels")
+        sns.despine()
+        plt.savefig(FILE_DISTRIBUTION_TEST)
+        plt.close()
+
+        logger.debug("Saving samples to file {}...".format(FILE_SAMPLES_TEST))
+        fig = plt.figure(1, figsize = (8, 8))
+        fig.suptitle("Sample Images from Test Set")
+        for i in range(25):
+            plt.subplot(5, 5, i + 1)
+            fn = os.path.join(files_test_path, test_df["file"][i])
+            image = load_img(fn)
+            plt.imshow(image)
+            plt.axis("off")
+        plt.tight_layout()
+        plt.savefig(FILE_SAMPLES_TEST)
+        plt.close()
+
+        logger.debug("test_df.shape={}".format(test_df.shape))
+
+        test_datagen = ImageDataGenerator(preprocessing_function = preprocess_input)
+        test_generator = test_datagen.flow_from_dataframe(
+            dataframe = test_df,
+            directory = files_test_path,
+            x_col = "file",
+            y_col = "label",
+            class_mode = "categorical",
+            target_size = (224, 224),
+            batch_size = batch_size,
+            seed = SEED,
+            shuffle = False
+        )
+
         model.load_weights(weights_fname)
 
         # predict all
-        val_pred = model.predict(val_generator, steps = np.ceil(val_data.shape[0] / batch_size))
+        test_pred = model.predict(test_generator, steps = np.ceil(test_df.shape[0] / batch_size))
 
         # Compute confusion matrix
-        val_data.loc[:, "val_pred"] = np.argmax(val_pred, axis = 1)
-        labels = dict((v, k) for k, v in val_generator.class_indices.items())
+        test_df.loc[:, "test_pred"] = np.argmax(test_pred, axis = 1)
+        labels = dict((v, k) for k, v in test_generator.class_indices.items())
         labels_names = []
         num_classes = len(labels)
         for i in range(num_classes):
             labels_names.append(labels[i])
-        val_data.loc[:, "val_pred"] = val_data.loc[:, "val_pred"].map(labels)
+        test_df.loc[:, "test_pred"] = test_df.loc[:, "test_pred"].map(labels)
         fig, ax = plt.subplots(figsize = (9, 6))
-        cm = confusion_matrix(val_data["label"], val_data["val_pred"])
+        cm = confusion_matrix(test_df["label"], test_df["test_pred"])
 
         # Compute performance indexes
         TP = np.diag(cm)
@@ -409,7 +470,7 @@ def main():
         fn_perf = "perf_" + fn + ".txt"    
          # Print results to file
         logger.debug("Saving performace indexes to file {}...".format(fn_perf))
-        print("\nEvaluation on validation set:", file=open(fn_perf, 'a'))
+        print("\nEvaluation on Test Set:", file=open(fn_perf, 'a'))
         print("classes: " + str(labels_names), file=open(fn_perf, 'a'))
         print("accuracy: " + str(accuracy), file=open(fn_perf, 'a'))
         print("precision: " + str(precision), file=open(fn_perf, 'a'))
@@ -419,9 +480,9 @@ def main():
         # Compute and save confusion Matrix diagram
         disp = ConfusionMatrixDisplay(confusion_matrix = cm, display_labels = labels_names)
         disp.plot(cmap = plt.cm.Blues, ax = ax)
-        ax.set_title("Validation Set")
-        logger.debug("Saving Confusion Matrix to file {}...".format(FILE_CM))
-        plt.savefig(FILE_CM)
+        ax.set_title("Test Set")
+        logger.debug("Saving Confusion Matrix to file {}...".format(FILE_CM_TEST))
+        plt.savefig(FILE_CM_TEST)
         plt.close()
 
     logger.debug("End of program.\n")
