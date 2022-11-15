@@ -66,6 +66,7 @@ FILE_DISTRIBUTION_TEST = "./perf_distrib_test.png"
 FILE_SAMPLES = "./perf_samples.png"
 FILE_SAMPLES_TEST = "./perf_samples_test.png"
 FILE_SAMPLES_DOGS = "./perf_samples_dogs.png"
+FILE_ERRORS = "./perf_errors.txt"
 
 # COPYRIGHT NOTICE AND PROGRAM VERSION
 COPYRIGHT_NOTICE = "Copyright (C) 2022 Giansalvo Gusinu"
@@ -491,6 +492,13 @@ def main():
         logger.debug("Saving Confusion Matrix to file {}...".format(FILE_CM_TEST))
         plt.savefig(FILE_CM_TEST)
         plt.close()
+
+        # Save errors to file
+        logger.debug("Saving classification errors to file {}...".format(FILE_ERRORS))
+        for lbl in labels_names:
+            selection =   test_df[(test_df['label'] == lbl) &
+                        (test_df['test_pred'] != lbl)]
+            print(selection, file=open(FILE_ERRORS, 'a'), flush=True)
 
     logger.debug("End of program.\n")
     return
