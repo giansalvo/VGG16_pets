@@ -48,8 +48,9 @@ from model_keras_VGG16 import create_VGG16_keras
 from model_VGG16_rt import create_model_VGG16_rt
 from model_keras_ResNet50 import create_ResNet50_keras
 
-SEED = 666
-
+SEED_DEFAULT = 1974
+PATIENCE_DEFAULT = 5
+EPOCHS_DEFAULT = 10
 BATCH_SIZE_DEFAULT = 128
 NUM_CLASSES_DEFAULT = 2
 
@@ -85,11 +86,6 @@ def listdir_fullpath(d):
 # Main
 #########################################
 def main():
-    tf.random.set_seed(SEED)
-    np.random.seed(SEED)
-    os.environ["PYTHONHASHSEED"] = str(SEED)                      
-    random.seed(SEED)
-
     # create logger
     logger = logging.getLogger('gians')
     logger.setLevel(logging.DEBUG)
@@ -121,7 +117,7 @@ def main():
         description=COPYRIGHT_NOTICE,
         epilog = "Examples:\n"
                 "       Train the network\n"
-                "         $python %(prog)s train -m network_model -dr dataset_root_folder -w weights_file [-b batch_size] [-c num_classes]\n"
+                "         $python %(prog)s train -m network_model -dr dataset_root_folder -w weights_file [-b batch_size] [-c num_classes] [-e epochs] [-p patience] [-s seed]\n"
                 "\n"
                 "       Make prediction for an image\n"
                 "         $python %(prog)s predict -m network_model -i input_image -w weights_file [-c num_classes]\n"
@@ -144,7 +140,9 @@ def main():
     parser.add_argument('-m', "--model", required=False,
                         choices=(MODEL_VGG16_KERAS, MODEL_VGG16_RT, MODEL_RESNET50_KERAS), 
                         help="The model of network to be created/used. It must be compatible with the weigths file.")
-
+    parser.add_argument("-e", "--epochs", required=False, default=EPOCHS_DEFAULT, type=int, help="The number of times that the entire dataset is passed forward and backward through the network during the training")
+    parser.add_argument("-p", "--patience", required=False, default=PATIENCE_DEFAULT, type=int, help="The number of epochs to wait before stopping training when no improvement is detected.")
+    parser.add_argument("-s", "--seed", required=False, default=SEED_DEFAULT, type=int, help="The random number seed initializer.")
                      
     args = parser.parse_args()
     
@@ -156,6 +154,15 @@ def main():
     input_image = args.input_image
     weights_fname = args.weigths_file
     network_model = args.model
+    seed = args.seed
+    patience = args.patience
+    epochs = args.epochs
+
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)                      
+    random.seed(seed)
+
 
     if action == ACTION_TRAIN:
         if dataset_root_dir is None:
@@ -218,7 +225,7 @@ def main():
         train_data, val_data = train_test_split(train_df, 
                                                 test_size = 0.2, 
                                                 stratify = train_df["label"], 
-                                                random_state = SEED)
+                                                random_state = seed)
         logger.debug("train_data.shape={}".format(train_data.shape))
         # datagen = ImageDataGenerator(
         #     rotation_range = 30, 
@@ -237,7 +244,7 @@ def main():
         #     y_col = "label",
         #     class_mode = "categorical",
         #     target_size = (224, 224),
-        #     seed = SEED
+        #     seed = seed
         # )
 
         # fig = plt.figure(figsize = (14, 8))
@@ -275,7 +282,7 @@ def main():
             class_mode = "categorical",
             target_size = (224, 224),
             batch_size = batch_size,
-            seed = SEED,
+            seed = seed,
         )
 
         val_generator = val_datagen.flow_from_dataframe(
@@ -286,7 +293,7 @@ def main():
             class_mode = "categorical",
             target_size = (224, 224),
             batch_size = batch_size,
-            seed = SEED,
+            seed = seed,
             shuffle = False
         )
 
@@ -311,7 +318,7 @@ def main():
 
         early_stopping = EarlyStopping(
             monitor = "val_accuracy",
-            patience = 5,
+            patience = patience,
             verbose = 1,
             mode = "max",
         )
@@ -334,7 +341,7 @@ def main():
             raise ValueError('ERROR: validation_steps is null. Reduce number of batch_size. Check syntax with --help.')
         history = model.fit(
             train_generator,
-            epochs = 10, 
+            epochs = epochs, 
             validation_data = val_generator,
             validation_steps = validation_steps,
             steps_per_epoch = steps_per_epoch,
@@ -429,7 +436,7 @@ def main():
             class_mode = "categorical",
             target_size = (224, 224),
             batch_size = batch_size,
-            seed = SEED,
+            seed = seed,
             shuffle = False
         )
 
