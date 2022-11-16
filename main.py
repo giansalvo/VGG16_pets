@@ -33,6 +33,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import os
 import sys
+import datetime
 import random
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, classification_report 
@@ -67,6 +68,7 @@ FILE_SAMPLES = "./perf_samples.png"
 FILE_SAMPLES_TEST = "./perf_samples_test.png"
 FILE_SAMPLES_DOGS = "./perf_samples_dogs.png"
 FILE_ERRORS = "./perf_errors.txt"
+FILE_ACCURACY = "./perf_accuracy.png"
 
 # COPYRIGHT NOTICE AND PROGRAM VERSION
 COPYRIGHT_NOTICE = "Copyright (C) 2022 Giansalvo Gusinu"
@@ -169,6 +171,7 @@ def main():
         if dataset_root_dir is None:
             raise ValueError('ERROR: parameter dataset_root_dir not specified. Check syntax with --help')
         files_train_path = os.path.join(dataset_root_dir, DATASET_TRAIN_SUBDIR)
+        training_start = datetime.datetime.now().replace(microsecond=0)
 
         # Prepare train dataframe
         # labels = [ item for item in os.listdir(files_train_path) if os.path.isdir(os.path.join(files_train_path, item)) ]
@@ -349,6 +352,24 @@ def main():
             callbacks = [reduce_lr, early_stopping, checkpoint]
         )
         
+        training_end = datetime.datetime.now().replace(microsecond=0)
+        logger.info("Network training end.")
+            
+        # Save performances to file
+        fn, fext = os.path.splitext(os.path.basename(weights_fname))
+        fn_perf = "perf_" + fn + ".txt"    
+
+        print("Saving performances to file..." + fn_perf)
+        # Save invocation command line
+        print("Invocation command: ", end="", file=open(fn_perf, 'a'))
+        narg = len(sys.argv)
+        for x in range(narg):
+            print(sys.argv[x], end = " ", file=open(fn_perf, 'a'))
+        print("\n", file=open(fn_perf, 'a'))
+        # Save performance information        
+        training_time = training_end - training_start
+        print("Training time: {}\n".format(training_time), file=open(fn_perf, 'a'))
+        logger.debug("Saving Loss and Accuracy functions to file {}...".format(FILE_ACCURACY))
         fig, axes = plt.subplots(1, 2, figsize = (12, 4))
         sns.lineplot(x = range(len(history.history["loss"])), y = history.history["loss"], ax = axes[0], label = "Training Loss")
         sns.lineplot(x = range(len(history.history["loss"])), y = history.history["val_loss"], ax = axes[0], label = "Validation Loss")
@@ -356,8 +377,6 @@ def main():
         sns.lineplot(x = range(len(history.history["accuracy"])), y = history.history["val_accuracy"], ax = axes[1], label = "Validation Accuracy")
         axes[0].set_title("Loss"); axes[1].set_title("Accuracy")
         sns.despine()
-        FILE_ACCURACY = "./perf_accuracy.png"
-        logger.debug("Saving Loss and Accuracy functions to file {}...".format(FILE_ACCURACY))
         plt.savefig(FILE_ACCURACY)
         plt.close()
 
