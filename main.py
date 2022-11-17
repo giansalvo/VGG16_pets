@@ -64,6 +64,7 @@ DATASET_TEST_SUBDIR = "test"
 FILES_WEIGHTS = "weights.hdf5"
 
 # Output performance file names
+FILE_WEIGHTS_TEMP = "weights_temp.h5"
 FILE_AUGMENT = "./perf_augment.png"
 FILE_CM_TEST = "./perf_cm_test.png"
 FILE_DISTRIBUTION_TRAIN = "./perf_distrib_train.png"
@@ -104,10 +105,80 @@ def plot_distrib_diag(data, fpath):
     plt.close()
 
 
+def do_evaluate(model, files_test_path, batch_size, seed, weights_fname):
+    global logger
+    test_df = pd.DataFrame({"file": os.listdir(files_test_path)})
+    test_df["label"] = test_df["file"].apply(lambda x: x.split(".")[0])
+    print("File in the dataset (print only some):")
+    print(test_df.head())
+ 
+    logger.debug("test_df.shape={}".format(test_df.shape))
+
+    test_datagen = ImageDataGenerator(preprocessing_function = preprocess_input)
+    test_generator = test_datagen.flow_from_dataframe(
+        dataframe = test_df,
+        directory = files_test_path,
+        x_col = "file",
+        y_col = "label",
+        class_mode = "categorical",
+        target_size = (224, 224),
+        batch_size = batch_size,
+        seed = seed,
+        shuffle = False
+    )
+
+    model.load_weights(weights_fname)
+
+    # predict all
+    test_pred = model.predict(test_generator, steps = np.ceil(test_df.shape[0] / batch_size))
+
+    # Compute confusion matrix
+    test_df.loc[:, "test_pred"] = np.argmax(test_pred, axis = 1)
+    labels = dict((v, k) for k, v in test_generator.class_indices.items())
+    labels_names = []
+    num_classes = len(labels)
+    for i in range(num_classes):
+        labels_names.append(labels[i])
+    test_df.loc[:, "test_pred"] = test_df.loc[:, "test_pred"].map(labels)
+    fig, ax = plt.subplots(figsize = (9, 6))
+    cm = confusion_matrix(test_df["label"], test_df["test_pred"])
+
+    # Compute performance indexes
+    TP = np.diag(cm)
+    FP = np.sum(cm, axis=0) - TP
+    FN = np.sum(cm, axis=1) - TP
+    TN = []
+    for i in range(num_classes):
+        temp = np.delete(cm, i, 0)    # delete ith row
+        temp = np.delete(temp, i, 1)  # delete ith column
+        TN.append(sum(sum(temp)))
+    # Overall accuracy
+    accuracy = (TP+TN)/(TP+FP+FN+TN)
+    # # sanity check
+    # for i in range(num_classes):
+    #     print(TP[i] + FP[i] + FN[i] + TN[i])
+    precision = TP/(TP+FP)
+    recall = TP/(TP+FN)
+    specificity = TN/(TN+FP)
+    fn, fext = os.path.splitext(os.path.basename(weights_fname))
+    fn_perf = "perf_" + fn + ".txt"    
+        # Print results to file
+    logger.debug("Saving performace indexes to file {}...".format(fn_perf))
+    print("\nEvaluation on Test Set:", file=open(fn_perf, 'a'))
+    print("classes: " + str(labels_names), file=open(fn_perf, 'a'))
+    print("accuracy: " + str(accuracy), file=open(fn_perf, 'a'))
+    print("precision: " + str(precision), file=open(fn_perf, 'a'))
+    print("recall: " + str(recall), file=open(fn_perf, 'a'))
+    print("specificity: " + str(specificity), file=open(fn_perf, 'a'))
+        
+    return np.mean(accuracy), np.mean(precision), np.mean(recall), np.mean(specificity)
+
+
 #########################################
 # Main
 #########################################
 def main():
+    global logger
     # create logger
     logger = logging.getLogger('gians')
     logger.setLevel(logging.DEBUG)
@@ -192,6 +263,7 @@ def main():
         if dataset_root_dir is None:
             raise ValueError('ERROR: parameter dataset_root_dir not specified. Check syntax with --help')
         files_train_path = os.path.join(dataset_root_dir, DATASET_TRAIN_SUBDIR)
+        files_test_path = os.path.join(dataset_root_dir, DATASET_TEST_SUBDIR)
         training_start = datetime.datetime.now().replace(microsecond=0)
 
         if network_model == MODEL_VGG16_KERAS:
@@ -206,6 +278,11 @@ def main():
             model = create_MobileNetV2_keras(num_classes)
         else:
             raise ValueError("ERROR: network model not recognized. Check syntax with --help.")
+
+        # Save performances to file
+        fn, fext = os.path.splitext(os.path.basename(weights_fname))
+        fn_perf = "perf_" + fn + ".txt"    
+
 
         # Prepare train dataframe
         # labels = [ item for item in os.listdir(files_train_path) if os.path.isdir(os.path.join(files_train_path, item)) ]
@@ -250,8 +327,14 @@ def main():
         plt.savefig(FILE_SAMPLES_DOGS)
         plt.close()
 
+        model.save_weights(FILE_WEIGHTS_TEMP)
+        accuracy = []
+        precision = []
+        recall = []
+        specificity = []
         for i in range(Kfolds):
-            logger.debug("K-fold={}".format(i))
+            logger.debug("Training fold={}".format(i))
+            print("Fold n.{}".format(i), file=open(fn_perf, 'a'))
             train_data, val_data = train_test_split(train_df, 
                                                     test_size = 0.2, 
                                                     stratify = train_df["label"], 
@@ -368,6 +451,9 @@ def main():
             logger.debug("steps_per_epoch={}".format(steps_per_epoch))
             if validation_steps == 0:
                 raise ValueError('ERROR: validation_steps is null. Reduce number of batch_size. Check syntax with --help.')
+
+            # train the network
+            model.load_weights(FILE_WEIGHTS_TEMP)
             history = model.fit(
                 train_generator,
                 epochs = epochs, 
@@ -380,10 +466,6 @@ def main():
             training_end = datetime.datetime.now().replace(microsecond=0)
             logger.info("Network training end.")
                 
-            # Save performances to file
-            fn, fext = os.path.splitext(os.path.basename(weights_fname))
-            fn_perf = "perf_" + fn + ".txt"    
-
             print("Saving performances to file..." + fn_perf)
             # Save invocation command line
             print("Invocation command: ", end="", file=open(fn_perf, 'a'))
@@ -404,6 +486,25 @@ def main():
             sns.despine()
             plt.savefig(FILE_ACCURACY)
             plt.close()
+
+            scores = do_evaluate(model, files_test_path, batch_size, seed, weights_fname)
+            print("scores="+str(scores), file=open(fn_perf, 'a'), flush=True)
+            accuracy.append(scores[0])
+            precision.append(scores[1])
+            recall.append(scores[2])
+            specificity.append(scores[3])
+        accuracy_avg = np.mean(np.array(accuracy))
+        precision_avg = np.mean(np.array(precision))
+        recall_avg = np.mean(np.array(recall))
+        specificity_avg = np.mean(np.array(specificity))
+        accuracy_std = np.std(np.array(accuracy), ddof=1)
+        precision_std = np.std(np.array(precision), ddof=1)
+        recall_std = np.std(np.array(recall), ddof=1)
+        specificity_std = np.std(np.array(specificity), ddof=1)
+        print("\nAccuracy: average {:.4f} +/- std {:.4f}".format(accuracy_avg, accuracy_std), file=open(fn_perf, 'a'), flush=True)
+        print("Precision: average {:.4f} +/- std {:.4f}".format(precision_avg, precision_std), file=open(fn_perf, 'a'), flush=True)
+        print("Reccall: average {:.4f} +/- std {:.4f}".format(recall_avg, recall_std), file=open(fn_perf, 'a'), flush=True)
+        print("Specificity: average {:.4f} +/- std {:.4f}".format(specificity_avg, specificity_std), file=open(fn_perf, 'a'), flush=True)                        
 
     elif action == ACTION_PREDICT:
         if input_image is None:
