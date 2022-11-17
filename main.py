@@ -57,6 +57,7 @@ PATIENCE_DEFAULT = 5
 EPOCHS_DEFAULT = 10
 BATCH_SIZE_DEFAULT = 128
 NUM_CLASSES_DEFAULT = 2
+K_FOLD_DEFAULT = 1
 
 DATASET_TRAIN_SUBDIR = "train"
 DATASET_TEST_SUBDIR = "test"
@@ -91,6 +92,17 @@ MODEL_MOBILENETV2 = "mobilenetv2"
 
 def listdir_fullpath(d):
     return [os.path.join(d, f) for f in os.listdir(d)]
+
+
+def plot_distrib_diag(data, fpath):
+    fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
+    ax.set_facecolor("#e5e5e5")
+    sns.countplot(x = "label", data = data, ax = ax)
+    ax.set_title("Distribution of Class Labels")
+    sns.despine()
+    plt.savefig(fpath)
+    plt.close()
+
 
 #########################################
 # Main
@@ -127,7 +139,7 @@ def main():
         description=COPYRIGHT_NOTICE,
         epilog = "Examples:\n"
                 "       Train the network\n"
-                "         $python %(prog)s train -m network_model -dr dataset_root_folder -w weights_file [-b batch_size] [-c num_classes] [-e epochs] [-p patience] [-s seed]\n"
+                "         $python %(prog)s train -m network_model -dr dataset_root_folder -w weights_file [-b batch_size] [-c num_classes] [-e epochs] [-p patience] [-s seed] [-k Kfold]\n"
                 "\n"
                 "       Make prediction for an image\n"
                 "         $python %(prog)s predict -m network_model -i input_image -w weights_file [-c num_classes]\n"
@@ -153,6 +165,7 @@ def main():
     parser.add_argument("-e", "--epochs", required=False, default=EPOCHS_DEFAULT, type=int, help="The number of times that the entire dataset is passed forward and backward through the network during the training")
     parser.add_argument("-p", "--patience", required=False, default=PATIENCE_DEFAULT, type=int, help="The number of epochs to wait before stopping training when no improvement is detected.")
     parser.add_argument("-s", "--seed", required=False, default=SEED_DEFAULT, type=int, help="The random number seed initializer.")
+    parser.add_argument("-k", "--kfolds", required=False, default=K_FOLD_DEFAULT, type=int, help="The number of folds for the K-folds cross validation.")
                      
     args = parser.parse_args()
     
@@ -167,6 +180,7 @@ def main():
     seed = args.seed
     patience = args.patience
     epochs = args.epochs
+    Kfolds = args.kfolds
 
     tf.random.set_seed(seed)
     np.random.seed(seed)
@@ -179,6 +193,19 @@ def main():
             raise ValueError('ERROR: parameter dataset_root_dir not specified. Check syntax with --help')
         files_train_path = os.path.join(dataset_root_dir, DATASET_TRAIN_SUBDIR)
         training_start = datetime.datetime.now().replace(microsecond=0)
+
+        if network_model == MODEL_VGG16_KERAS:
+            model = create_VGG16_keras(num_classes, freeze_base=True)
+        elif network_model == MODEL_VGG16_RT:
+            model = create_model_VGG16_rt(num_classes)
+        elif network_model == MODEL_RESNET50_KERAS:
+            model = create_ResNet50_keras(num_classes)
+        elif network_model == MODEL_DENSENET201:
+            model = create_DenseNet201_keras(num_classes)
+        elif network_model == MODEL_MOBILENETV2:
+            model = create_MobileNetV2_keras(num_classes)
+        else:
+            raise ValueError("ERROR: network model not recognized. Check syntax with --help.")
 
         # Prepare train dataframe
         # labels = [ item for item in os.listdir(files_train_path) if os.path.isdir(os.path.join(files_train_path, item)) ]
@@ -223,183 +250,160 @@ def main():
         plt.savefig(FILE_SAMPLES_DOGS)
         plt.close()
 
+        for i in range(Kfolds):
+            logger.debug("K-fold={}".format(i))
+            train_data, val_data = train_test_split(train_df, 
+                                                    test_size = 0.2, 
+                                                    stratify = train_df["label"], 
+                                                    random_state = seed)
+            logger.debug("train_data.shape={}".format(train_data.shape))
+            logger.debug("Saving Train set Distribution Diagram to file {}...".format(FILE_DISTRIBUTION_TRAIN))
+            plot_distrib_diag(data=train_data, fpath=FILE_DISTRIBUTION_TRAIN)
+            logger.debug("Saving Validation set Distribution Diagram to file {}...".format(FILE_DISTRIBUTION_VALIDATION))
+            plot_distrib_diag(data = val_data, fpath=FILE_DISTRIBUTION_VALIDATION)
 
-        train_data, val_data = train_test_split(train_df, 
-                                                test_size = 0.2, 
-                                                stratify = train_df["label"], 
-                                                random_state = seed)
-        logger.debug("train_data.shape={}".format(train_data.shape))
+            # datagen = ImageDataGenerator(
+            #     rotation_range = 30, 
+            #     width_shift_range = 0.1,
+            #     height_shift_range = 0.1, 
+            #     brightness_range = (0.5, 1), 
+            #     zoom_range = 0.2,
+            #     horizontal_flip = True, 
+            #     rescale = 1./255,
+            # )
+            # sample_df = train_data.sample(1)
+            # sample_generator = datagen.flow_from_dataframe(
+            #     dataframe = sample_df,
+            #     directory = FILES + "train/",
+            #     x_col = "file",
+            #     y_col = "label",
+            #     class_mode = "categorical",
+            #     target_size = (224, 224),
+            #     seed = seed
+            # )
 
-        logger.debug("Saving Train set Distribution Diagram to file {}...".format(FILE_DISTRIBUTION_TRAIN))
-        fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
-        ax.set_facecolor("#e5e5e5")
-        sns.countplot(x = "label", data = train_data, ax = ax)
-        ax.set_title("Distribution of Class Labels")
-        sns.despine()
-        plt.savefig(FILE_DISTRIBUTION_TRAIN)
-        plt.close()
+            # fig = plt.figure(figsize = (14, 8))
+            # fig.suptitle("Augmentation techniques")
+            # for i in range(50):
+            #     plt.subplot(5, 10, i + 1)
+            #     for X, y in sample_generator:
+            #         plt.imshow(X[0])
+            #         plt.axis("off")
+            #         break
+            # plt.tight_layout()
+            # if check:
+            #     plt.show()
+            # else:
+            #     logger.debug("Saving augmentation samples to file {}...".format(FILE_AUGMENT))
+            #     plt.savefig(FILE_AUGMENT)
+            #     plt.close()
 
-        logger.debug("Saving Validation set Distribution Diagram to file {}...".format(FILE_DISTRIBUTION_VALIDATION))
-        fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
-        ax.set_facecolor("#e5e5e5")
-        sns.countplot(x = "label", data = val_data, ax = ax)
-        ax.set_title("Distribution of Class Labels")
-        sns.despine()
-        plt.savefig(FILE_DISTRIBUTION_VALIDATION)
-        plt.close()
+            train_datagen = ImageDataGenerator(
+                rotation_range = 15, 
+            #     width_shift_range = 0.1,
+            #     height_shift_range = 0.1, 
+            #     brightness_range = (0.5, 1), 
+            #     zoom_range = 0.1,
+                horizontal_flip = True,
+                preprocessing_function = preprocess_input
+            )
+            val_datagen = ImageDataGenerator(preprocessing_function = preprocess_input)
 
-        # datagen = ImageDataGenerator(
-        #     rotation_range = 30, 
-        #     width_shift_range = 0.1,
-        #     height_shift_range = 0.1, 
-        #     brightness_range = (0.5, 1), 
-        #     zoom_range = 0.2,
-        #     horizontal_flip = True, 
-        #     rescale = 1./255,
-        # )
-        # sample_df = train_data.sample(1)
-        # sample_generator = datagen.flow_from_dataframe(
-        #     dataframe = sample_df,
-        #     directory = FILES + "train/",
-        #     x_col = "file",
-        #     y_col = "label",
-        #     class_mode = "categorical",
-        #     target_size = (224, 224),
-        #     seed = seed
-        # )
+            train_generator = train_datagen.flow_from_dataframe(
+                dataframe = train_data,
+                directory = files_train_path,
+                x_col = "file",
+                y_col = "label",
+                class_mode = "categorical",
+                target_size = (224, 224),
+                batch_size = batch_size,
+                seed = seed,
+            )
+            val_generator = val_datagen.flow_from_dataframe(
+                dataframe = val_data,
+                directory = files_train_path,
+                x_col = "file",
+                y_col = "label",
+                class_mode = "categorical",
+                target_size = (224, 224),
+                batch_size = batch_size,
+                seed = seed,
+                shuffle = False
+            )
 
-        # fig = plt.figure(figsize = (14, 8))
-        # fig.suptitle("Augmentation techniques")
-        # for i in range(50):
-        #     plt.subplot(5, 10, i + 1)
-        #     for X, y in sample_generator:
-        #         plt.imshow(X[0])
-        #         plt.axis("off")
-        #         break
-        # plt.tight_layout()
-        # if check:
-        #     plt.show()
-        # else:
-        #     logger.debug("Saving augmentation samples to file {}...".format(FILE_AUGMENT))
-        #     plt.savefig(FILE_AUGMENT)
-        #     plt.close()
+            # Compile network model
+            model.compile(loss = "categorical_crossentropy", 
+                            optimizer = "adam", 
+                            metrics = "accuracy")
+            model.summary()
 
-        train_datagen = ImageDataGenerator(
-            rotation_range = 15, 
-        #     width_shift_range = 0.1,
-        #     height_shift_range = 0.1, 
-        #     brightness_range = (0.5, 1), 
-        #     zoom_range = 0.1,
-            horizontal_flip = True,
-            preprocessing_function = preprocess_input
-        )
+            reduce_lr = ReduceLROnPlateau(
+                monitor = "val_accuracy", 
+                patience = 2,
+                verbose = 1, 
+                factor = 0.5, 
+                min_lr = 0.000000001
+            )
 
-        val_datagen = ImageDataGenerator(preprocessing_function = preprocess_input)
-        train_generator = train_datagen.flow_from_dataframe(
-            dataframe = train_data,
-            directory = files_train_path,
-            x_col = "file",
-            y_col = "label",
-            class_mode = "categorical",
-            target_size = (224, 224),
-            batch_size = batch_size,
-            seed = seed,
-        )
+            early_stopping = EarlyStopping(
+                monitor = "val_accuracy",
+                patience = patience,
+                verbose = 1,
+                mode = "max",
+            )
 
-        val_generator = val_datagen.flow_from_dataframe(
-            dataframe = val_data,
-            directory = files_train_path,
-            x_col = "file",
-            y_col = "label",
-            class_mode = "categorical",
-            target_size = (224, 224),
-            batch_size = batch_size,
-            seed = seed,
-            shuffle = False
-        )
+            checkpoint = ModelCheckpoint(
+                monitor = "val_accuracy",
+                filepath = weights_fname,
+                verbose = 1,
+                save_best_only = True, 
+                save_weights_only = True
+            )
 
-        if network_model == MODEL_VGG16_KERAS:
-            model = create_VGG16_keras(num_classes, freeze_base=True)
-        elif network_model == MODEL_VGG16_RT:
-            model = create_model_VGG16_rt(num_classes)
-        elif network_model == MODEL_RESNET50_KERAS:
-            model = create_ResNet50_keras(num_classes)
-        elif network_model == MODEL_DENSENET201:
-            model = create_DenseNet201_keras(num_classes)
-        elif network_model == MODEL_MOBILENETV2:
-            model = create_MobileNetV2_keras(num_classes)
-        else:
-            raise ("ERROR: network model not recognized. Check syntax with --help.")
-        model.compile(loss = "categorical_crossentropy", optimizer = "adam", metrics = "accuracy")
-        model.summary()
-
-        reduce_lr = ReduceLROnPlateau(
-            monitor = "val_accuracy", 
-            patience = 2,
-            verbose = 1, 
-            factor = 0.5, 
-            min_lr = 0.000000001
-        )
-
-        early_stopping = EarlyStopping(
-            monitor = "val_accuracy",
-            patience = patience,
-            verbose = 1,
-            mode = "max",
-        )
-
-        checkpoint = ModelCheckpoint(
-            monitor = "val_accuracy",
-            filepath = weights_fname,
-            verbose = 1,
-            save_best_only = True, 
-            save_weights_only = True
-        )
-
-        validation_samples_num = val_data.shape[0]
-        logger.debug("validation_samples_num={}".format(validation_samples_num))
-        validation_steps = val_data.shape[0] // batch_size
-        logger.debug("validation_steps={}".format(validation_steps))
-        steps_per_epoch = train_data.shape[0] // batch_size
-        logger.debug("steps_per_epoch={}".format(steps_per_epoch))
-        if validation_steps == 0:
-            raise ValueError('ERROR: validation_steps is null. Reduce number of batch_size. Check syntax with --help.')
-        history = model.fit(
-            train_generator,
-            epochs = epochs, 
-            validation_data = val_generator,
-            validation_steps = validation_steps,
-            steps_per_epoch = steps_per_epoch,
-            callbacks = [reduce_lr, early_stopping, checkpoint]
-        )
-        
-        training_end = datetime.datetime.now().replace(microsecond=0)
-        logger.info("Network training end.")
+            validation_samples_num = val_data.shape[0]
+            logger.debug("validation_samples_num={}".format(validation_samples_num))
+            validation_steps = val_data.shape[0] // batch_size
+            logger.debug("validation_steps={}".format(validation_steps))
+            steps_per_epoch = train_data.shape[0] // batch_size
+            logger.debug("steps_per_epoch={}".format(steps_per_epoch))
+            if validation_steps == 0:
+                raise ValueError('ERROR: validation_steps is null. Reduce number of batch_size. Check syntax with --help.')
+            history = model.fit(
+                train_generator,
+                epochs = epochs, 
+                validation_data = val_generator,
+                validation_steps = validation_steps,
+                steps_per_epoch = steps_per_epoch,
+                callbacks = [reduce_lr, early_stopping, checkpoint]
+            )
             
-        # Save performances to file
-        fn, fext = os.path.splitext(os.path.basename(weights_fname))
-        fn_perf = "perf_" + fn + ".txt"    
+            training_end = datetime.datetime.now().replace(microsecond=0)
+            logger.info("Network training end.")
+                
+            # Save performances to file
+            fn, fext = os.path.splitext(os.path.basename(weights_fname))
+            fn_perf = "perf_" + fn + ".txt"    
 
-        print("Saving performances to file..." + fn_perf)
-        # Save invocation command line
-        print("Invocation command: ", end="", file=open(fn_perf, 'a'))
-        narg = len(sys.argv)
-        for x in range(narg):
-            print(sys.argv[x], end = " ", file=open(fn_perf, 'a'))
-        print("\n", file=open(fn_perf, 'a'))
-        # Save performance information        
-        training_time = training_end - training_start
-        print("Training time: {}\n".format(training_time), file=open(fn_perf, 'a'))
-        logger.debug("Saving Loss and Accuracy functions to file {}...".format(FILE_ACCURACY))
-        fig, axes = plt.subplots(1, 2, figsize = (12, 4))
-        sns.lineplot(x = range(len(history.history["loss"])), y = history.history["loss"], ax = axes[0], label = "Training Loss")
-        sns.lineplot(x = range(len(history.history["loss"])), y = history.history["val_loss"], ax = axes[0], label = "Validation Loss")
-        sns.lineplot(x = range(len(history.history["accuracy"])), y = history.history["accuracy"], ax = axes[1], label = "Training Accuracy")
-        sns.lineplot(x = range(len(history.history["accuracy"])), y = history.history["val_accuracy"], ax = axes[1], label = "Validation Accuracy")
-        axes[0].set_title("Loss"); axes[1].set_title("Accuracy")
-        sns.despine()
-        plt.savefig(FILE_ACCURACY)
-        plt.close()
+            print("Saving performances to file..." + fn_perf)
+            # Save invocation command line
+            print("Invocation command: ", end="", file=open(fn_perf, 'a'))
+            narg = len(sys.argv)
+            for x in range(narg):
+                print(sys.argv[x], end = " ", file=open(fn_perf, 'a'))
+            print("\n", file=open(fn_perf, 'a'))
+            # Save performance information        
+            training_time = training_end - training_start
+            print("Training time: {}\n".format(training_time), file=open(fn_perf, 'a'))
+            logger.debug("Saving Loss and Accuracy functions to file {}...".format(FILE_ACCURACY))
+            fig, axes = plt.subplots(1, 2, figsize = (12, 4))
+            sns.lineplot(x = range(len(history.history["loss"])), y = history.history["loss"], ax = axes[0], label = "Training Loss")
+            sns.lineplot(x = range(len(history.history["loss"])), y = history.history["val_loss"], ax = axes[0], label = "Validation Loss")
+            sns.lineplot(x = range(len(history.history["accuracy"])), y = history.history["accuracy"], ax = axes[1], label = "Training Accuracy")
+            sns.lineplot(x = range(len(history.history["accuracy"])), y = history.history["val_accuracy"], ax = axes[1], label = "Validation Accuracy")
+            axes[0].set_title("Loss"); axes[1].set_title("Accuracy")
+            sns.despine()
+            plt.savefig(FILE_ACCURACY)
+            plt.close()
 
     elif action == ACTION_PREDICT:
         if input_image is None:
