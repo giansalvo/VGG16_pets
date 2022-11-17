@@ -50,6 +50,7 @@ from model_keras_VGG16 import create_VGG16_keras
 from model_VGG16_rt import create_model_VGG16_rt
 from model_keras_ResNet50 import create_ResNet50_keras
 from model_keras_DenseNet import create_DenseNet201_keras
+from model_keras_MobileNet import create_MobileNetV2_keras
 
 SEED_DEFAULT = 1974
 PATIENCE_DEFAULT = 5
@@ -84,6 +85,7 @@ MODEL_VGG16_KERAS = "vgg16"
 MODEL_VGG16_RT = "vgg16_rt"
 MODEL_RESNET50_KERAS = "resnet50"
 MODEL_DENSENET201 = "densenet201"
+MODEL_MOBILENETV2 = "mobilenetv2"
 
 
 def listdir_fullpath(d):
@@ -145,7 +147,7 @@ def main():
     parser.add_argument("-w", "--weigths_file", required=False, default=FILES_WEIGHTS,
                         help="The file where the network weights will be saved. It must be compatible with the network model chosen.")
     parser.add_argument('-m', "--model", required=False,
-                        choices=(MODEL_VGG16_KERAS, MODEL_VGG16_RT, MODEL_RESNET50_KERAS, MODEL_DENSENET201), 
+                        choices=(MODEL_VGG16_KERAS, MODEL_VGG16_RT, MODEL_RESNET50_KERAS, MODEL_DENSENET201, MODEL_MOBILENETV2), 
                         help="The model of network to be created/used. It must be compatible with the weigths file.")
     parser.add_argument("-e", "--epochs", required=False, default=EPOCHS_DEFAULT, type=int, help="The number of times that the entire dataset is passed forward and backward through the network during the training")
     parser.add_argument("-p", "--patience", required=False, default=PATIENCE_DEFAULT, type=int, help="The number of epochs to wait before stopping training when no improvement is detected.")
@@ -313,6 +315,8 @@ def main():
             model = create_ResNet50_keras(num_classes)
         elif network_model == MODEL_DENSENET201:
             model = create_DenseNet201_keras(num_classes)
+        elif network_model == MODEL_MOBILENETV2:
+            model = create_MobileNetV2_keras(num_classes)
         else:
             raise ("ERROR: network model not recognized. Check syntax with --help.")
         model.compile(loss = "categorical_crossentropy", optimizer = "adam", metrics = "accuracy")
@@ -397,6 +401,8 @@ def main():
             model = create_ResNet50_keras(num_classes)
         elif network_model == MODEL_DENSENET201:
             model = create_DenseNet201_keras(num_classes)
+        elif network_model == MODEL_MOBILENETV2:
+            model = create_MobileNetV2_keras(num_classes)
         else:
             raise ("ERROR: network model not recognized. Check syntax with --help.")
 
@@ -420,6 +426,8 @@ def main():
             model = create_ResNet50_keras(num_classes)
         elif network_model == MODEL_DENSENET201:
             model = create_DenseNet201_keras(num_classes)
+        elif network_model == MODEL_MOBILENETV2:
+            model = create_MobileNetV2_keras(num_classes)
         else:
             raise ("ERROR: network model not recognized. Check syntax with --help.")
 
