@@ -66,6 +66,7 @@ FILES_WEIGHTS = "weights.hdf5"
 FILE_AUGMENT = "./perf_augment.png"
 FILE_CM_TEST = "./perf_cm_test.png"
 FILE_DISTRIBUTION_TRAIN = "./perf_distrib_train.png"
+FILE_DISTRIBUTION_VALIDATION = "./perf_distrib_validation.png"
 FILE_DISTRIBUTION_TEST = "./perf_distrib_test.png"
 FILE_SAMPLES = "./perf_samples.png"
 FILE_SAMPLES_TEST = "./perf_samples_test.png"
@@ -196,15 +197,6 @@ def main():
         # test_df = pd.DataFrame({"file": os.listdir(FILES_TEST)})
         # print(test_df.head())
 
-        logger.debug("Saving Distribution Diagram to file {}...".format(FILE_DISTRIBUTION_TRAIN))
-        fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
-        ax.set_facecolor("#e5e5e5")
-        sns.countplot(x = "label", data = train_df, ax = ax)
-        ax.set_title("Distribution of Class Labels")
-        sns.despine()
-        plt.savefig(FILE_DISTRIBUTION_TRAIN)
-        plt.close()
-
         logger.debug("Saving samples to file {}...".format(FILE_SAMPLES))
         fig = plt.figure(1, figsize = (8, 8))
         fig.suptitle("Training Set Images (Sample)")
@@ -237,6 +229,25 @@ def main():
                                                 stratify = train_df["label"], 
                                                 random_state = seed)
         logger.debug("train_data.shape={}".format(train_data.shape))
+
+        logger.debug("Saving Train set Distribution Diagram to file {}...".format(FILE_DISTRIBUTION_TRAIN))
+        fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
+        ax.set_facecolor("#e5e5e5")
+        sns.countplot(x = "label", data = train_data, ax = ax)
+        ax.set_title("Distribution of Class Labels")
+        sns.despine()
+        plt.savefig(FILE_DISTRIBUTION_TRAIN)
+        plt.close()
+
+        logger.debug("Saving Validation set Distribution Diagram to file {}...".format(FILE_DISTRIBUTION_VALIDATION))
+        fig, ax = plt.subplots(figsize = (6, 6), facecolor = "#e5e5e5")
+        ax.set_facecolor("#e5e5e5")
+        sns.countplot(x = "label", data = val_data, ax = ax)
+        ax.set_title("Distribution of Class Labels")
+        sns.despine()
+        plt.savefig(FILE_DISTRIBUTION_VALIDATION)
+        plt.close()
+
         # datagen = ImageDataGenerator(
         #     rotation_range = 30, 
         #     width_shift_range = 0.1,
